@@ -1,58 +1,45 @@
+// CS5540 Lab1
+// Author: Jerry ZJ
+// Date: 2019/09/26
+#include <cmath>
 #include <iostream>
 #include <mpi.h>
-#include <cmath>
-#include <cassert>
 
 using namespace std;
 
-int main(int argc, char** argv){
-
-    assert(argc == 2);
-
+int main(int argc, char **argv) {
     MPI_Status status;
     const long long N(static_cast<long long>(atoll(argv[1])));
-    const double N_inv(static_cast<double>(1.0 / N));
-    int rank(0);
-    int task_num(0);
-    int rc(0);
-    double pi(0.0);
-    double area(0.0);
-    double x(0.0);
-    double y(0.0);
-    double temp(0.0);
+    int rank(0), task_num(0);
+    double area(0.0), x(0.0), temp(0.0);
 
-    rc = MPI_Init(&argc, &argv);
-    if(rc != MPI_SUCCESS){
-        cerr << "MPI_Init returned nonzero" << endl;
-        exit(-1);
-    }
+    MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &task_num);
 
-    int N_per_task = N / task_num;
-    int Res = N % task_num;
+    // Devide N slices to n different tasks
+    const int N_per_task(N / task_num), Res(N % task_num);
 
-    if(rank == 0){
-        for (int i = 0; i < N_per_task + Res; ++i){
+    if (rank == 0) {
+        // rank 0 will handle remain parts
+        int i(0);
+        for (i = 0; i < N_per_task + Res; ++i) {
             x = i;
-            y = sqrt(1 - pow((x / N), 2.0));
-            area += static_cast<double>(y);
+            area += sqrt(1 - pow((x / N), 2.0));
         }
-        for (int i = 1; i < task_num; ++i){
+        // Collect results
+        for (int i = 1; i < task_num; ++i) {
             MPI_Recv(&temp, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, &status);
             area += temp;
         }
-        pi = area * 4 * N_inv;
         cout.precision(15);
-        cout<<pi<<endl;
-    }
-    else{
+        cout << static_cast<double>(area * 4.0 / N) << endl;
+    } else {
         double area_temp(0.0);
 
-        for (int i = 0; i < N_per_task; ++i){
-            x = rank * N_per_task + i + Res;
-            y = sqrt(1 - pow((x / N), 2.0));
-            area_temp += static_cast<double>(y);
+        for (int i = 0; i < N_per_task; ++i) {
+            x = rank * N_per_task + Res + i;
+            area_temp += sqrt(1 - pow((x / N), 2.0));
         }
         MPI_Request req;
         MPI_Isend(&area_temp, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &req);
