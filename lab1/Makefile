@@ -1,7 +1,7 @@
 CC = mpicc
 CXX = mpicxx
 LDLIBS = -lm
-CXXFLAGS = -O3 -Wall
+CXXFLAGS = -Ofast -Wall -std=c++17
 CFLAGS = -O3 -Wall
 TARGETS = pi
 
