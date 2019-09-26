@@ -22,8 +22,7 @@ int main(int argc, char **argv) {
 
     if (rank == 0) {
         // rank 0 will handle remain parts
-        int i(0);
-        for (i = 0; i < N_per_task + Res; ++i) {
+        for (int i = 0; i < N_per_task + Res; ++i) {
             x = i;
             area += sqrt(1 - pow((x / N), 2.0));
         }
