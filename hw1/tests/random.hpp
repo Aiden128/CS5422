@@ -11,7 +11,7 @@
 template <typename T> const std::vector<T> random_gen(const int num) {
     std::random_device rd;
     std::mt19937_64 generator( rd() );
-    std::normal_distribution<T> norm(0.0, 1.0);
+    std::normal_distribution<double> norm(0.0, 1.0);
     std::uniform_int_distribution<int> uni_int(0, 10000); 
     std::vector<T> vector;
 
