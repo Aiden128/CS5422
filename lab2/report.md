@@ -4,7 +4,7 @@
 
 ## Compile with Address Sanitizer and run
 
-![螢幕快照 2019-10-03 15.03.52](report.assets/螢幕快照 2019-10-03 15.03.52.png)
+![2019-10-03 15.03.52](report.assets/15.03.52.png)
 
 ## Debug
 
