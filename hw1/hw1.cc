@@ -1,12 +1,8 @@
 // CS5540 Homework 1: Odd-Even Sort
 // Author: Jerry ZJ
 // Date: 2019/09/27
-#include "util.h"
 #include "oe.h"
-#include <iostream>
-#include <mpi.h>
 #include <cassert>
-
 using namespace std;
 
 int main(int argc, char **argv) {

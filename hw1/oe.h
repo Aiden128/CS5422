@@ -2,26 +2,33 @@
 #define OE_H
 
 #include <algorithm>
-#include <string>
-#include <iostream>
 #include <exception>
+#include <iostream>
+#include <mpi.h>
+#include <string>
 
 class OE_sort {
-public:
-    OE_sort(int rank, int task_num, int total_size, 
-            const char* input_file, const char* output_file);
+  public:
+    OE_sort(int rank, int task_num, int file_size, const char *input_file,
+            const char *output_file);
     ~OE_sort();
-private:
-    int rank;
-    int task_num;
-    int total_size;
-    int num_per_task;
-    int res;
-    int size;
-    int offset;
-    float* buffer;
-    const char* input_file;
-    const char* output_file; 
+    void read_file();
+    void write_file();
+    void sort();
+
+  private:
+    int rank;         // My rank ID
+    int task_num;     // Total ranks
+    int file_size;    // File size, should be N * sizeof(float)
+    int num_per_task; // Number of floats handled by a rank
+    int res;          // Remainings
+    int size;         // Buffer size, num of float
+    int left_size;
+    int right_size;
+    int offset;       // Read start point
+    float *buffer;
+    const char *input_file;
+    const char *output_file;
 };
 
 #endif
