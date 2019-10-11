@@ -8,7 +8,7 @@
 #include <string>
 
 class OE_sort {
-  public:
+public:
     OE_sort(int rank, int task_num, int file_size, const char *input_file,
             const char *output_file);
     ~OE_sort();
@@ -16,17 +16,20 @@ class OE_sort {
     void write_file();
     void sort();
 
-  private:
+private:
+    bool odd_even(int state);
     int rank;         // My rank ID
     int task_num;     // Total ranks
     int file_size;    // File size, should be N * sizeof(float)
     int num_per_task; // Number of floats handled by a rank
-    int res;          // Remainings
+    int res;          // Remaining part
     int size;         // Buffer size, num of float
     int left_size;
     int right_size;
     int offset;       // Read start point
     float *buffer;
+    bool global_sorted;
+    bool local_sorted;
     const char *input_file;
     const char *output_file;
 };
