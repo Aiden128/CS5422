@@ -7,6 +7,22 @@
 #include <mpi.h>
 #include <string>
 
+
+template <typename T>
+struct Buffer {
+    const T *base;
+    T *start;
+    const T *end;
+    Buffer(ssize_t size){
+        base = new T[size];
+        start = base;
+        end = start + size;
+    }
+    ~Buffer(){
+        delete[](base);
+    }
+}
+
 class OE_sort {
 public:
     OE_sort(int rank, int task_num, int file_size, const char *input_file,
