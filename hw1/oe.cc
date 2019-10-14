@@ -92,10 +92,70 @@ void OE_sort::sort() {
     }
 }
 
-bool OE_sort::do_left() {
+bool OE_sort::_do_left() {
 
 }
 
-bool OE_sort::do_right() {
+bool OE_sort::_do_right() {
     
+}
+
+void OE_sort::_merge_small(Buffer &src1, Buffer &src2, Buffer &dest) {
+    // Set iter to index 0
+    src1.reset_iter(src1.head);
+    src2.reset_iter(src2.head);
+    dest.reset_iter(dest.head);
+
+    // Fill data
+    while(src1.iter < src1.end && src2.iter < src2.end && dest.iter < dest.end){
+        if (*src1.iter < *src2.iter) {
+            *dest.iter++ = *src1.iter++;
+        }
+        else {
+            *dest.iter++ = *src2.iter++;
+        }
+    }
+
+    // Fill blanks in dest
+    if (dest.iter < dest.end){
+        int offset(0);
+        if(src1.iter < src1.end){
+            offset = std::min(dest.end - dest.iter, src1.end - src1.iter);
+            std::copy(src1.iter, src1.iter + offset, dest.iter);
+        }
+        else{
+            offset = std::min(dest.end - dest.iter, src2.end - src2.iter);
+            std::copy(src2.iter, src2.iter + offset, dest.iter);
+        }
+    }
+}
+
+void OE_sort::_merge_large(Buffer &src1, Buffer &src2, Buffer &dest) {
+    // Set iter to the end of buffer
+    src1.reset_iter(src1.tail);
+    src2.reset_iter(src2.tail);
+    dest.reset_iter(dest.tail);
+
+    // Fill data
+    while(src1.base <= src1.iter && src2.base <= src2.iter && dest.base <= dest.iter){
+        if (*src1.iter > *src2.iter) {
+            *dest.iter-- = *src1.iter--;
+        }
+        else {
+            *dest.iter-- = *src2.iter--;
+        }
+    }
+
+    // Fill blanks in dest
+    if (dest.base < dest.iter){
+        int offset(0);
+        if(src1.iter < src1.end){
+            offset = std::min(dest.iter - dest.base, src1.iter - src1.base) + 1;
+            std::copy(src1.iter, src1.iter + offset, dest.iter);
+        }
+        else{
+            offset = std::min(dest.iter - dest.base, src2.iter - src2.base) + 1;
+            std::copy(src2.iter, src2.iter + offset, dest.iter);
+        }
+    }
 }

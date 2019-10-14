@@ -7,21 +7,32 @@
 #include <mpi.h>
 #include <string>
 
-
-template <typename T>
 struct Buffer {
-    const T *base;
-    T *start;
-    const T *end;
-    Buffer(ssize_t size){
+    const float *base;
+    const float *end;
+    float *iter;
+    enum pos{head, tail};
+    ptr_arr(const ssize_t size){
         base = new T[size];
-        start = base;
-        end = start + size;
+        iter = const_cast<float *>(base);
+        end = const_cast<float *>(base) + size;
     }
-    ~Buffer(){
-        delete[](base);
+    ~ptr_arr(){
+        delete[] (base);
     }
-}
+    void reset_iter(pos position) {
+        if (position == head) {
+            iter = const_cast<float *>(base);
+        }
+        else if (position == tail){
+            iter = const_cast<float *>(end) - 1;
+        }
+        else {
+            std::cerr << "undefined position" << std::endl;
+            exit(-1);
+        }
+    }
+};
 
 class OE_sort {
 public:
@@ -51,8 +62,10 @@ private:
     const char *input_file;
     const char *output_file;
 
-    bool do_left();
-    bool do_right();
+    bool _do_left();
+    bool _do_right();
+    void _merge_small(Buffer &src1, Buffer &src2, Buffer &dest);
+    void _merge_large(Buffer &src1, Buffer &src2, Buffer &dest);
 };
 
 #endif
