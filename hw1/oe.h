@@ -5,67 +5,43 @@
 #include <exception>
 #include <iostream>
 #include <mpi.h>
-#include <string>
-
-struct Buffer {
-    const float *base;
-    const float *end;
-    float *iter;
-    enum pos{head, tail};
-    ptr_arr(const ssize_t size){
-        base = new T[size];
-        iter = const_cast<float *>(base);
-        end = const_cast<float *>(base) + size;
-    }
-    ~ptr_arr(){
-        delete[] (base);
-    }
-    void reset_iter(pos position) {
-        if (position == head) {
-            iter = const_cast<float *>(base);
-        }
-        else if (position == tail){
-            iter = const_cast<float *>(end) - 1;
-        }
-        else {
-            std::cerr << "undefined position" << std::endl;
-            exit(-1);
-        }
-    }
-};
 
 class OE_sort {
-public:
-    OE_sort(int rank, int task_num, int file_size, const char *input_file,
-            const char *output_file);
+  public:
+    explicit OE_sort(int rank, int task_num, int file_size,
+                     const char *input_file, const char *output_file);
     ~OE_sort();
     void read_file();
     void write_file();
     void sort();
 
-private:
-    int rank;         // My rank ID
-    int task_num;     // Total ranks
-    int file_size;    // File size, should be N * sizeof(float)
+  private:
+    enum mpi_tags { left, right, null };
+    int rank;      // My rank ID
+    int task_num;  // Total ranks
+    int file_size; // File size, should be N * sizeof(float)
+    float *&curr_buffer;
+    const char *input_file;
+    const char *output_file;
+    bool global_sorted;
+    bool local_sorted;
+
     int num_per_task; // Number of floats handled by a rank
     int res;          // Remaining part
     int size;         // Buffer size, num of float
+    int offset;       // Read starting point
     int left_size;    // Data number of left rank
     int right_size;   // Data number of right rank
-    int offset;       // Read starting point
-    float *&curr_buffer;
+    float *neighbor_buffer;
     float *buffer0;
     float *buffer1;
-    float *neighbor_buffer;
-    bool global_sorted;
-    bool local_sorted;
-    const char *input_file;
-    const char *output_file;
 
     bool _do_left();
     bool _do_right();
-    void _merge_small(Buffer &src1, Buffer &src2, Buffer &dest);
-    void _merge_large(Buffer &src1, Buffer &src2, Buffer &dest);
+    void _merge_small(float *src1, ssize_t src1_size, float *src2,
+                      ssize_t src2_size, float *dest, ssize_t dest_size);
+    void _merge_large(float *src1, ssize_t src1_size, float *src2,
+                      ssize_t src2_size, float *dest, ssize_t dest_size);
 };
 
 #endif
