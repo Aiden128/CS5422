@@ -19,7 +19,6 @@ class OE_sort {
     enum mpi_tags { left, right, null };
     int rank;      // My rank ID
     int task_num;  // Total ranks
-    int file_size; // File size, should be N * sizeof(float)
     float *&curr_buffer;
     const char *input_file;
     const char *output_file;

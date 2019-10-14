@@ -4,7 +4,7 @@ using namespace std;
 
 OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
                  const char *output_file)
-    : rank(rank), task_num(task_num), file_size(file_size),
+    : rank(rank), task_num(task_num),
       curr_buffer(rank % 2 ? buffer1 : buffer0), input_file(input_file),
       output_file(output_file), global_sorted(false), local_sorted(false) {
 
@@ -70,6 +70,11 @@ void OE_sort::sort() {
     // use STL to sort local content
     std::sort(curr_buffer, curr_buffer + size);
     local_sorted = true;
+    
+    // Debug
+    // cout << "Rank = " << rank << " buffer: " << *curr_buffer << endl;
+    // cout << "Rank = " << rank << " foreign size: " << left_size << endl;
+    
     // Split odd rank & even rank
     if (rank % 2) {
         while (!global_sorted) {
