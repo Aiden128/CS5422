@@ -27,6 +27,10 @@ int main(int argc, char **argv) {
         oe.single_write_file();
     }
 
+#ifdef PERF
+    cout << "Rank: " << rank << " Merge: " << oe.read_time << " ns" << endl;
+#endif
+
     MPI_Finalize();
     return 0;
 }

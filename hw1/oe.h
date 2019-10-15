@@ -1,6 +1,9 @@
 #ifndef OE_H
 #define OE_H
 
+#ifdef PERF
+#include <chrono>
+#endif
 #include <algorithm>
 #include <exception>
 #include <iostream>
@@ -20,6 +23,19 @@ class OE_sort {
     void single_write_file();
     void single_sort();
     schedule_mode schedule;
+
+#ifdef PERF
+    double read_time;
+    double wirte_time;
+    double MPI_transmission_time;
+    double MPI_sync_time;
+    double merge_time;
+
+    double glob_read;
+    double glob_write;
+    double glob_trans;
+    double glob_merge;
+#endif
 
   private:
     enum mpi_tags { left, right, null };
