@@ -5,7 +5,7 @@ using namespace std;
 OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
                  const char *output_file)
     : rank(rank), task_num(task_num),
-      curr_buffer(rank % 2 ? buffer1 : buffer0), input_file(input_file),
+      main_buffer(rank % 2 ? buffer1 : buffer0), input_file(input_file),
       output_file(output_file) {
 
     // Data partition
@@ -35,12 +35,6 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
     std::fill_n(neighbor_buffer, left_size, 0);
     std::fill_n(buffer0, size, 0);
     std::fill_n(buffer1, size, 0);
-    // Debug
-    // cout << "Rank = "<<rank<< " Size = "<<size<<" lSize = " << left_size << 
-    // " rSize = "<< right_size <<endl;
-    // if(rank == task_num -1){
-    //     cout << "========End of constructor========" << endl;
-    // }
 }
 
 OE_sort::~OE_sort() {
@@ -53,22 +47,16 @@ void OE_sort::read_file() {
     MPI_File fh;
     MPI_File_open(MPI_COMM_WORLD, input_file, MPI_MODE_RDONLY, MPI_INFO_NULL,
                   &fh);
-    MPI_File_read_at_all(fh, offset * sizeof(float), curr_buffer, size,
+    MPI_File_read_at_all(fh, offset * sizeof(float), main_buffer, size,
                          MPI_FLOAT, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
-    // debug
-    // cout << "rank = "<<rank << endl;
-    // for(int i = 0; i < size; ++i){
-    //    cout << curr_buffer[i] << " ";
-    // }
-    // cout << endl;
 }
 
 void OE_sort::write_file() {
     MPI_File fh;
     MPI_File_open(MPI_COMM_WORLD, output_file,
                   MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
-    MPI_File_write_at_all(fh, offset * sizeof(float), curr_buffer, size,
+    MPI_File_write_at_all(fh, offset * sizeof(float), main_buffer, size,
                           MPI_FLOAT, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
 }
@@ -78,26 +66,14 @@ void OE_sort::sort() {
     bool local_sorted(false);
 
     // use STL to sort local content
-    std::sort(curr_buffer, curr_buffer + size);
+    std::sort(main_buffer, main_buffer + size);
     // Split odd rank & even rank
-    if (rank % 2) {
+    if (rank % 2 == 1) {
         while (not global_sorted) {
             local_sorted = true;
-            bool local_sorted_1 = _do_left();
-            if(local_sorted_1 == true){
-                cout << "Rank = " << rank << " do_left finished!" << endl;
-            }
-            else {
-                cout << "Rank = " << rank << " do_left failed!" << endl;
-            }
-            bool local_sorted_2 = _do_right();
-            if(local_sorted_2 == true) {
-                cout << "Rank = " << rank << " do_right finished!" << endl;
-            }
-            else {
-                cout << "Rank = " << rank << " do_right failed!" << endl;
-            }
-            local_sorted = local_sorted_1 & local_sorted_2;
+            bool local_sorted_1 = not _do_left();
+            bool local_sorted_2 = not _do_right();
+            local_sorted = (local_sorted_1 & local_sorted_2);
             // Sync sorting status
             MPI_Allreduce(&local_sorted, &global_sorted, 1, MPI::BOOL, MPI_LAND,
                           MPI_COMM_WORLD);
@@ -105,21 +81,9 @@ void OE_sort::sort() {
     } else {
         while (not global_sorted) {
             local_sorted = true;
-            bool local_sorted_1 = _do_right();
-            if(local_sorted_1 == true){
-                cout << "Rank = " << rank << " do_right finished!" << endl;
-            }
-            else {
-                cout << "Rank = " << rank << " do_right failed!" << endl;
-            }
-            bool local_sorted_2 = _do_left();
-            if(local_sorted_2 == true) {
-                cout << "Rank = " << rank << " do_left finished!" << endl;
-            }
-            else {
-                cout << "Rank = " << rank << " do_left failed!" << endl;
-            }
-            local_sorted = local_sorted_1 & local_sorted_2;
+            bool local_sorted_1 = not _do_right();
+            bool local_sorted_2 = not _do_left();
+            local_sorted = (local_sorted_1 & local_sorted_2);
             // Sync sorting status
             MPI_Allreduce(&local_sorted, &global_sorted, 1, MPI::BOOL, MPI_LAND,
                           MPI_COMM_WORLD);

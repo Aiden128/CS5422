@@ -18,7 +18,7 @@ private:
     enum mpi_tags { left, right, null };
     const int rank;      // My rank ID
     const int task_num;  // Total ranks
-    float *&curr_buffer;
+    float *&main_buffer;
     const char *input_file;
     const char *output_file;
 
