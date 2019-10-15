@@ -6,18 +6,25 @@
 #include <iostream>
 #include <mpi.h>
 
+enum schedule_mode { single, parallel, parallel_thr, null };
+
 class OE_sort {
-public:
+  public:
     explicit OE_sort(int rank, int task_num, int file_size,
                      const char *input_file, const char *output_file);
     ~OE_sort();
-    void read_file();
-    void write_file();
-    void sort();
-private:
+    void parallel_read_file();
+    void parallel_write_file();
+    void parallel_sort();
+    void single_read_file();
+    void single_write_file();
+    void single_sort();
+    schedule_mode schedule;
+
+  private:
     enum mpi_tags { left, right, null };
-    const int rank;      // My rank ID
-    const int task_num;  // Total ranks
+    const int rank;     // My rank ID
+    const int task_num; // Total ranks
     float *&main_buffer;
     const char *input_file;
     const char *output_file;

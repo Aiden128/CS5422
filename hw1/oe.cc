@@ -4,46 +4,65 @@ using namespace std;
 
 OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
                  const char *output_file)
-    : rank(rank), task_num(task_num),
-      main_buffer(rank % 2 ? buffer1 : buffer0), input_file(input_file),
-      output_file(output_file) {
+    : rank(rank), task_num(task_num), main_buffer(rank % 2 ? buffer1 : buffer0),
+      input_file(input_file), output_file(output_file) {
 
     // Data partition
     num_per_task = file_size / task_num;
     res = file_size % task_num;
-    size = num_per_task + (rank < res); // remaining parts will divided by all
-    offset = num_per_task * rank + std::min(rank, res);
 
-    // Calculate left/right buffer size
-    // if (rank == 0) {
-    //     left_size = 0;
-    // } else {
-    //     left_size = num_per_task + ((rank - 1) < res);
-    // }
-    // if ((rank + 1) == task_num) {
-    //     right_size = 0;
-    // } else {
-    //     right_size = num_per_task + ((rank + 1) < res);
-    // }
-    left_size = num_per_task + ((rank - 1) < res);
-    right_size = num_per_task + ((rank + 1) < res);
+    if (num_per_task <= 500) {
+        schedule = single;
+        if (rank == 0) {
+            size = file_size;
+            offset = 0;
+            left_size = 0;
+            right_size = 0;
+            buffer0 = new float[size];
+            buffer1 = nullptr;
+            neighbor_buffer = nullptr;
+            std::fill_n(buffer0, size, 0);
+        } else {
+            size = 0;
+            offset = 0;
+            left_size = 0;
+            right_size = 0;
+            buffer0 = nullptr;
+            buffer1 = nullptr;
+            neighbor_buffer = nullptr;
+        }
+    } else {
+        schedule = parallel;
+        size =
+            num_per_task + (rank < res); // remaining parts will divided by all
+        offset = num_per_task * rank + std::min(rank, res);
+        // Calculate left/right buffer size
+        left_size = num_per_task + ((rank - 1) < res);
+        right_size = num_per_task + ((rank + 1) < res);
 
-    // neighbor_buffer = new float[std::max(left_size, right_size)];
-    neighbor_buffer = new float[left_size];
-    buffer0 = new float[size];
-    buffer1 = new float[size];
-    std::fill_n(neighbor_buffer, left_size, 0);
-    std::fill_n(buffer0, size, 0);
-    std::fill_n(buffer1, size, 0);
+        neighbor_buffer = new float[std::max(left_size, right_size)];
+        // neighbor_buffer = new float[left_size];
+        buffer0 = new float[size];
+        buffer1 = new float[size];
+        std::fill_n(neighbor_buffer, left_size, 0);
+        std::fill_n(buffer0, size, 0);
+        std::fill_n(buffer1, size, 0);
+    }
 }
 
 OE_sort::~OE_sort() {
-    delete[](buffer0);
-    delete[](buffer1);
-    delete[](neighbor_buffer);
+    if (schedule == parallel) {
+        delete[](buffer0);
+        delete[](buffer1);
+        delete[](neighbor_buffer);
+    } else if (schedule == single) {
+        if (rank == 0) {
+            delete[](buffer0);
+        }
+    }
 }
 
-void OE_sort::read_file() {
+void OE_sort::parallel_read_file() {
     MPI_File fh;
     MPI_File_open(MPI_COMM_WORLD, input_file, MPI_MODE_RDONLY, MPI_INFO_NULL,
                   &fh);
@@ -52,7 +71,17 @@ void OE_sort::read_file() {
     MPI_File_close(&fh);
 }
 
-void OE_sort::write_file() {
+void OE_sort::single_read_file() {
+    MPI_File fh;
+    MPI_File_open(MPI_COMM_WORLD, input_file, MPI_MODE_RDONLY, MPI_INFO_NULL,
+                  &fh);
+    if (rank == 0) {
+        MPI_File_read_at(fh, 0, buffer0, size, MPI_FLOAT, MPI_STATUS_IGNORE);
+    }
+    MPI_File_close(&fh);
+}
+
+void OE_sort::parallel_write_file() {
     MPI_File fh;
     MPI_File_open(MPI_COMM_WORLD, output_file,
                   MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
@@ -61,7 +90,17 @@ void OE_sort::write_file() {
     MPI_File_close(&fh);
 }
 
-void OE_sort::sort() {
+void OE_sort::single_write_file() {
+    MPI_File fh;
+    MPI_File_open(MPI_COMM_WORLD, output_file,
+                  MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
+    if (rank == 0) {
+        MPI_File_write_at(fh, 0, buffer0, size, MPI_FLOAT, MPI_STATUS_IGNORE);
+    }
+    MPI_File_close(&fh);
+}
+
+void OE_sort::parallel_sort() {
     bool global_sorted(false);
     bool local_sorted(false);
 
@@ -89,7 +128,13 @@ void OE_sort::sort() {
                           MPI_COMM_WORLD);
         }
     }
-} 
+}
+
+void OE_sort::single_sort() {
+    if (rank == 0) {
+        std::sort(buffer0, buffer0 + size);
+    }
+}
 
 bool OE_sort::_do_left() {
     if (rank == 0 || size == 0) {
