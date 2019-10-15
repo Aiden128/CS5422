@@ -7,23 +7,20 @@
 #include <mpi.h>
 
 class OE_sort {
-  public:
+public:
     explicit OE_sort(int rank, int task_num, int file_size,
                      const char *input_file, const char *output_file);
     ~OE_sort();
     void read_file();
     void write_file();
     void sort();
-
-  private:
+private:
     enum mpi_tags { left, right, null };
-    int rank;      // My rank ID
-    int task_num;  // Total ranks
+    const int rank;      // My rank ID
+    const int task_num;  // Total ranks
     float *&curr_buffer;
     const char *input_file;
     const char *output_file;
-    bool global_sorted;
-    bool local_sorted;
 
     int num_per_task; // Number of floats handled by a rank
     int res;          // Remaining part
