@@ -6,7 +6,7 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
                  const char *output_file)
     : rank(rank), task_num(task_num),
       curr_buffer(rank % 2 ? buffer1 : buffer0), input_file(input_file),
-      output_file(output_file), global_sorted(false), local_sorted(false) {
+      output_file(output_file) {
 
     // Data partition
     num_per_task = file_size / task_num;
@@ -15,24 +15,32 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
     offset = num_per_task * rank + std::min(rank, res);
 
     // Calculate left/right buffer size
-    if (rank == 0) {
-        left_size = 0;
-    } else {
-        left_size = num_per_task + ((rank - 1) < res);
-    }
-    if ((rank + 1) == task_num) {
-        right_size = 0;
-    } else {
-        right_size = num_per_task + ((rank + 1) < res);
-    }
+    // if (rank == 0) {
+    //     left_size = 0;
+    // } else {
+    //     left_size = num_per_task + ((rank - 1) < res);
+    // }
+    // if ((rank + 1) == task_num) {
+    //     right_size = 0;
+    // } else {
+    //     right_size = num_per_task + ((rank + 1) < res);
+    // }
+    left_size = num_per_task + ((rank - 1) < res);
+    right_size = num_per_task + ((rank + 1) < res);
 
     // neighbor_buffer = new float[std::max(left_size, right_size)];
     neighbor_buffer = new float[left_size];
     buffer0 = new float[size];
     buffer1 = new float[size];
+    std::fill_n(neighbor_buffer, left_size, 0);
+    std::fill_n(buffer0, size, 0);
+    std::fill_n(buffer1, size, 0);
     // Debug
-    // cout << "Rank = "<<rank<< " Size = "<<size<<" lSize = " << left_size << "
-    // rSize = "<< right_size <<endl;
+    // cout << "Rank = "<<rank<< " Size = "<<size<<" lSize = " << left_size << 
+    // " rSize = "<< right_size <<endl;
+    // if(rank == task_num -1){
+    //     cout << "========End of constructor========" << endl;
+    // }
 }
 
 OE_sort::~OE_sort() {
@@ -50,10 +58,9 @@ void OE_sort::read_file() {
     MPI_File_close(&fh);
     // debug
     // cout << "rank = "<<rank << endl;
-    // cout << "Content" <<endl;
     // for(int i = 0; i < size; ++i){
-    //    cout << buffer[i] << " ";
-    //}
+    //    cout << curr_buffer[i] << " ";
+    // }
     // cout << endl;
 }
 
@@ -67,36 +74,62 @@ void OE_sort::write_file() {
 }
 
 void OE_sort::sort() {
+    bool global_sorted(false);
+    bool local_sorted(false);
+
     // use STL to sort local content
     std::sort(curr_buffer, curr_buffer + size);
-    local_sorted = true;
-    
-    // Debug
-    // cout << "Rank = " << rank << " buffer: " << *curr_buffer << endl;
-    // cout << "Rank = " << rank << " foreign size: " << left_size << endl;
-    
     // Split odd rank & even rank
     if (rank % 2) {
-        while (!global_sorted) {
-            local_sorted = local_sorted & _do_left();
-            local_sorted = local_sorted & _do_right();
+        while (not global_sorted) {
+            local_sorted = true;
+            bool local_sorted_1 = _do_left();
+            if(local_sorted_1 == true){
+                cout << "Rank = " << rank << " do_left finished!" << endl;
+            }
+            else {
+                cout << "Rank = " << rank << " do_left failed!" << endl;
+            }
+            bool local_sorted_2 = _do_right();
+            if(local_sorted_2 == true) {
+                cout << "Rank = " << rank << " do_right finished!" << endl;
+            }
+            else {
+                cout << "Rank = " << rank << " do_right failed!" << endl;
+            }
+            local_sorted = local_sorted_1 & local_sorted_2;
             // Sync sorting status
             MPI_Allreduce(&local_sorted, &global_sorted, 1, MPI::BOOL, MPI_LAND,
                           MPI_COMM_WORLD);
         }
     } else {
-        while (!global_sorted) {
-            local_sorted = local_sorted & _do_right();
-            local_sorted = local_sorted & _do_left();
+        while (not global_sorted) {
+            local_sorted = true;
+            bool local_sorted_1 = _do_right();
+            if(local_sorted_1 == true){
+                cout << "Rank = " << rank << " do_right finished!" << endl;
+            }
+            else {
+                cout << "Rank = " << rank << " do_right failed!" << endl;
+            }
+            bool local_sorted_2 = _do_left();
+            if(local_sorted_2 == true) {
+                cout << "Rank = " << rank << " do_left finished!" << endl;
+            }
+            else {
+                cout << "Rank = " << rank << " do_left failed!" << endl;
+            }
+            local_sorted = local_sorted_1 & local_sorted_2;
+            // Sync sorting status
             MPI_Allreduce(&local_sorted, &global_sorted, 1, MPI::BOOL, MPI_LAND,
                           MPI_COMM_WORLD);
         }
     }
-}
+} 
 
 bool OE_sort::_do_left() {
     if (rank == 0 || size == 0) {
-        std::swap(buffer0, buffer1); // may be replaced by my swap
+        std::swap(buffer0, buffer1);
         return false;
     }
     MPI_Request request;
@@ -109,7 +142,7 @@ bool OE_sort::_do_left() {
         std::swap(buffer0, buffer1);
         return false;
     }
-    _merge_large(buffer0, size, buffer1, size, neighbor_buffer, left_size);
+    _merge_large(buffer1, size, neighbor_buffer, left_size, buffer0, size);
     return true;
 }
 
@@ -181,9 +214,9 @@ void OE_sort::_merge_large(float *src1, ssize_t src1_size, float *src2,
     }
 
     // Fill blanks in dest
-    if (dest < dest_iter) {
+    if (dest <= dest_iter) {
         int offset(0);
-        if (src1_iter < src1_end) {
+        if (src1_iter <= src1_end) {
             offset = std::min(dest_iter - dest, src1_iter - src1) + 1;
             std::copy(src1_iter, src1_iter + offset, dest_iter);
         } else {
