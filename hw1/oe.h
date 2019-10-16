@@ -3,16 +3,22 @@
 
 #ifdef PERF
 #include <chrono>
-#endif
+//#include <pstl/execution>
+#include <parallel/algorithm>
+#else
 #include <algorithm>
+#endif
 #include <exception>
 #include <iostream>
 #include <mpi.h>
 
+#ifdef PERF
+// using namespace pstl;
+#endif
 enum schedule_mode { single, parallel, parallel_thr, null };
 
 class OE_sort {
-  public:
+public:
     explicit OE_sort(int rank, int task_num, int file_size,
                      const char *input_file, const char *output_file);
     ~OE_sort();
@@ -25,19 +31,24 @@ class OE_sort {
     schedule_mode schedule;
 
 #ifdef PERF
+    double mem_time;
     double read_time;
-    double wirte_time;
+    double write_time;
     double MPI_transmission_time;
     double MPI_sync_time;
     double merge_time;
+    double stl_sort_time;
 
-    double glob_read;
-    double glob_write;
-    double glob_trans;
-    double glob_merge;
+    double avg_mem;
+    double avg_read;
+    double avg_write;
+    double avg_trans;
+    double avg_sync;
+    double avg_merge;
+    double avg_stl_sort;
 #endif
 
-  private:
+private:
     enum mpi_tags { left, right, null };
     const int rank;     // My rank ID
     const int task_num; // Total ranks

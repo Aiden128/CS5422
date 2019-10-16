@@ -12,15 +12,21 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
     res = file_size % task_num;
 
 #ifdef PERF
+    mem_time = 0.0;
     read_time = 0.0;
-    wirte_time = 0.0;
+    write_time = 0.0;
     MPI_transmission_time = 0.0;
     MPI_sync_time = 0.0;
     merge_time = 0.0;
-    glob_read = 0.0;
-    glob_write = 0.0;
-    glob_trans = 0.0;
-    glob_merge = 0.0;
+    stl_sort_time = 0.0;
+
+    avg_mem = 0.0;
+    avg_read = 0.0;
+    avg_write = 0.0;
+    avg_trans = 0.0;
+    avg_sync = 0.0;
+    avg_merge = 0.0;
+    avg_stl_sort = 0.0;
 #endif
 
     if (num_per_task <= 500) {
@@ -30,10 +36,19 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
             offset = 0;
             left_size = 0;
             right_size = 0;
+#ifdef PERF
+            auto mem_start = chrono::high_resolution_clock::now();
+#endif
             buffer0 = new float[size];
             buffer1 = nullptr;
             neighbor_buffer = nullptr;
             std::fill_n(buffer0, size, 0);
+#ifdef PERF
+            auto mem_end = chrono::high_resolution_clock::now();
+            mem_time =
+                chrono::duration_cast<chrono::nanoseconds>(mem_end - mem_start)
+                    .count();
+#endif
         } else {
             size = 0;
             offset = 0;
@@ -52,13 +67,21 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
         left_size = num_per_task + ((rank - 1) < res);
         right_size = num_per_task + ((rank + 1) < res);
 
+#ifdef PERF
+        auto mem_start = chrono::high_resolution_clock::now();
+#endif
         neighbor_buffer = new float[std::max(left_size, right_size)];
-        // neighbor_buffer = new float[left_size];
         buffer0 = new float[size];
         buffer1 = new float[size];
         std::fill_n(neighbor_buffer, left_size, 0);
         std::fill_n(buffer0, size, 0);
         std::fill_n(buffer1, size, 0);
+#ifdef PERF
+        auto mem_end = chrono::high_resolution_clock::now();
+        mem_time =
+            chrono::duration_cast<chrono::nanoseconds>(mem_end - mem_start)
+                .count();
+#endif
     }
 }
 
@@ -107,9 +130,11 @@ void OE_sort::single_read_file() {
     MPI_File_close(&fh);
 
 #ifdef PERF
-    auto r_end = chrono::high_resolution_clock::now();
-    read_time =
-        chrono::duration_cast<chrono::nanoseconds>(r_end - r_start).count();
+    if (rank == 0) {
+        auto r_end = chrono::high_resolution_clock::now();
+        read_time =
+            chrono::duration_cast<chrono::nanoseconds>(r_end - r_start).count();
+    }
 #endif
 }
 
@@ -127,7 +152,7 @@ void OE_sort::parallel_write_file() {
 
 #ifdef PERF
     auto w_end = chrono::high_resolution_clock::now();
-    read_time =
+    write_time =
         chrono::duration_cast<chrono::nanoseconds>(w_end - w_start).count();
 #endif
 }
@@ -146,9 +171,11 @@ void OE_sort::single_write_file() {
     MPI_File_close(&fh);
 
 #ifdef PERF
-    auto w_end = chrono::high_resolution_clock::now();
-    read_time =
-        chrono::duration_cast<chrono::nanoseconds>(w_end - w_start).count();
+    if (rank == 0) {
+        auto w_end = chrono::high_resolution_clock::now();
+        write_time =
+            chrono::duration_cast<chrono::nanoseconds>(w_end - w_start).count();
+    }
 #endif
 }
 
@@ -156,8 +183,24 @@ void OE_sort::parallel_sort() {
     bool global_sorted(false);
     bool local_sorted(false);
 
+#ifdef PERF
+    auto stl_start = chrono::high_resolution_clock::now();
+#endif
+
+#ifdef PERF
+    // std::sort(pstl::execution::par_unseq, main_buffer, main_buffer + size);
+    __gnu_parallel::sort(main_buffer, main_buffer + size);
+#else
     // use STL to sort local content
     std::sort(main_buffer, main_buffer + size);
+#endif
+
+#ifdef PERF
+    auto stl_end = chrono::high_resolution_clock::now();
+    stl_sort_time +=
+        chrono::duration_cast<chrono::nanoseconds>(stl_end - stl_start).count();
+#endif
+
     // Split odd rank & even rank
     if (rank % 2 == 1) {
         while (not global_sorted) {
@@ -165,9 +208,21 @@ void OE_sort::parallel_sort() {
             bool local_sorted_1 = not _do_left();
             bool local_sorted_2 = not _do_right();
             local_sorted = (local_sorted_1 & local_sorted_2);
+
+#ifdef PERF
+            auto sync_start = chrono::high_resolution_clock::now();
+#endif
+
             // Sync sorting status
             MPI_Allreduce(&local_sorted, &global_sorted, 1, MPI::BOOL, MPI_LAND,
                           MPI_COMM_WORLD);
+
+#ifdef PERF
+            auto sync_end = chrono::high_resolution_clock::now();
+            MPI_sync_time += chrono::duration_cast<chrono::nanoseconds>(
+                                 sync_end - sync_start)
+                                 .count();
+#endif
         }
     } else {
         while (not global_sorted) {
@@ -175,16 +230,45 @@ void OE_sort::parallel_sort() {
             bool local_sorted_1 = not _do_right();
             bool local_sorted_2 = not _do_left();
             local_sorted = (local_sorted_1 & local_sorted_2);
+
+#ifdef PERF
+            auto sync_start = chrono::high_resolution_clock::now();
+#endif
+
             // Sync sorting status
             MPI_Allreduce(&local_sorted, &global_sorted, 1, MPI::BOOL, MPI_LAND,
                           MPI_COMM_WORLD);
+
+#ifdef PERF
+            auto sync_end = chrono::high_resolution_clock::now();
+            MPI_sync_time += chrono::duration_cast<chrono::nanoseconds>(
+                                 sync_end - sync_start)
+                                 .count();
+#endif
         }
     }
 }
 
 void OE_sort::single_sort() {
+#ifdef PERF
+    auto stl_start = chrono::high_resolution_clock::now();
+#endif
+
     if (rank == 0) {
+#ifdef PERF
+        // std::sort(pstl::execution::par_unseq, buffer0, buffer0 + size);
+        __gnu_parallel::sort(buffer0, buffer0 + size);
+#else
+        // use STL to sort local content
         std::sort(buffer0, buffer0 + size);
+#endif
+
+#ifdef PERF
+        auto stl_end = chrono::high_resolution_clock::now();
+        stl_sort_time =
+            chrono::duration_cast<chrono::nanoseconds>(stl_end - stl_start)
+                .count();
+#endif
     }
 }
 
