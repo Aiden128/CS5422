@@ -187,7 +187,7 @@ void OE_sort::parallel_sort() {
     auto stl_start = chrono::high_resolution_clock::now();
 #endif
 
-#ifdef PERF
+#ifdef PARA_STL
     // std::sort(pstl::execution::par_unseq, main_buffer, main_buffer + size);
     __gnu_parallel::sort(main_buffer, main_buffer + size);
 #else
@@ -255,7 +255,7 @@ void OE_sort::single_sort() {
 #endif
 
     if (rank == 0) {
-#ifdef PERF
+#ifdef PARA_STL
         // std::sort(pstl::execution::par_unseq, buffer0, buffer0 + size);
         __gnu_parallel::sort(buffer0, buffer0 + size);
 #else

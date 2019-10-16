@@ -3,18 +3,21 @@
 
 #ifdef PERF
 #include <chrono>
-//#include <pstl/execution>
+#include <fstream>
+#include <numeric>
+#include <string>
+#endif
+
+#ifdef PARA_STL
 #include <parallel/algorithm>
 #else
 #include <algorithm>
 #endif
+
 #include <exception>
 #include <iostream>
 #include <mpi.h>
 
-#ifdef PERF
-// using namespace pstl;
-#endif
 enum schedule_mode { single, parallel, parallel_thr, null };
 
 class OE_sort {
