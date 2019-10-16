@@ -54,3 +54,5 @@ dkms.conf
 *.tar*
 # Build dir
 build
+
+.vscode
