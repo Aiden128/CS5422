@@ -1,0 +1,8 @@
+AVG Mem: 3.98961e+08 ns
+AVG Read: 3.26577e+08 ns
+AVG Write: 2.19821e+09 ns
+AVG MPI Trans: 2.18233e+09 ns
+AVG MPI Sync: 8.09505e+08 ns
+AVG Merge: 1.6306e+09 ns
+AVG STL sort: 5.67334e+09 ns
+Avg total: 13.2195 s
