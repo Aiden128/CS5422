@@ -53,6 +53,7 @@ int main(int argc, char **argv) {
             }
         }
         ofstream file;
+        ofstream csv_file;
         string test_filename(argv[2]);
         size_t pos = test_filename.find("../");
         if (pos != std::string::npos) {
@@ -71,6 +72,16 @@ int main(int argc, char **argv) {
         auto avg_total = std::accumulate(global_results, global_results + 7, 0.0);
         file << "    Total: " << avg_total << endl;
         file.close();
+        csv_file.open("profile.csv", std::ofstream::out | std::ofstream::app);
+        csv_file << global_results[0] << ",";
+        csv_file << global_results[1] << ",";
+        csv_file << global_results[2] << ",";
+        csv_file << global_results[3] << ",";
+        csv_file << global_results[4] << ",";
+        csv_file << global_results[5] << ",";
+        csv_file << global_results[6] << ",";
+        csv_file << avg_total << "," << endl;
+        csv_file.close();
     }
 #endif
 
