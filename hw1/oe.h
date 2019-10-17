@@ -8,17 +8,15 @@
 #include <string>
 #endif
 
-#ifdef PARA_STL
-#include <parallel/algorithm>
-#else
-#include <algorithm>
-#endif
+#include "tbb/task_scheduler_init.h"
 
+#include <algorithm>
 #include <exception>
+#include <execution>
 #include <iostream>
 #include <mpi.h>
 
-enum schedule_mode { single, parallel, parallel_thr, null };
+enum schedule_mode { single, fuse, parallel, null };
 
 class OE_sort {
 public:
@@ -58,6 +56,7 @@ private:
     float *&main_buffer;
     const char *input_file;
     const char *output_file;
+    tbb::task_scheduler_init task_scheduler;
 
     int num_per_task; // Number of floats handled by a rank
     int res;          // Remaining part
@@ -66,8 +65,8 @@ private:
     int left_size;    // Data number of left rank
     int right_size;   // Data number of right rank
     float *neighbor_buffer;
-    float *buffer0;
-    float *buffer1;
+    float *even_buffer;
+    float *odd_buffer;
 
     bool _do_left();
     bool _do_right();
