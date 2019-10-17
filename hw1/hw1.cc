@@ -12,7 +12,9 @@ int main(int argc, char **argv) {
 #ifdef DEBUG
     assert(argc == 4); // Make sure arguments are ready
 #endif
-
+#ifdef PERF
+    auto main_start = chrono::high_resolution_clock::now();
+#endif
     int rank(0), task_num(0);
     // Start processing
     MPI_Init(&argc, &argv);
@@ -50,40 +52,37 @@ int main(int argc, char **argv) {
                 global_results[i] /= task_num;
             }
         }
-        // cout << "AVG Mem: " << global_results[0] << " ns" << endl;
-        // cout << "AVG Read: " << global_results[1] << " ns" << endl;
-        // cout << "AVG Write: " << global_results[2] << " ns" << endl;
-        // cout << "AVG MPI Trans: " << global_results[3] << " ns" << endl;
-        // cout << "AVG MPI Sync: " << global_results[4] << " ns" << endl;
-        // cout << "AVG Merge: " << global_results[5] << " ns" << endl;
-        // cout << "AVG STL sort: " << global_results[6] << " ns" << endl;
-        // auto avg_total = std::accumulate(global_results, global_results + 7, 0.0) / 1e9;
-        // cout << "Avg total: " << avg_total << " s" << endl;
         ofstream file;
-        string filename(argv[3]);
-#ifdef PARA_STL
-        filename.append("_para_stl");
-#endif
-        filename.append("_perf.txt");
-        size_t pos = filename.find("./");
+        string test_filename(argv[2]);
+        size_t pos = test_filename.find("../");
         if (pos != std::string::npos) {
             // If found then erase it from string
-            filename.erase(pos, 2);
+            test_filename.erase(pos, 3);
         }
-        file.open(filename.c_str());
-        file << "AVG Mem: " << global_results[0] << " ns" << endl;
-        file << "AVG Read: " << global_results[1] << " ns" << endl;
-        file << "AVG Write: " << global_results[2] << " ns" << endl;
-        file << "AVG MPI Trans: " << global_results[3] << " ns" << endl;
-        file << "AVG MPI Sync: " << global_results[4] << " ns" << endl;
-        file << "AVG Merge: " << global_results[5] << " ns" << endl;
-        file << "AVG STL sort: " << global_results[6] << " ns" << endl;
-        auto avg_total = std::accumulate(global_results, global_results + 7, 0.0) / 1e9;
-        file << "Avg total: " << avg_total << " s" << endl;
+        file.open("profile.yml", std::ofstream::out | std::ofstream::app);
+        file << test_filename << ":" << endl; 
+        file << "    Mem allocate: " << global_results[0] << endl;
+        file << "    MPI Read: " << global_results[1]  << endl;
+        file << "    MPI Write: " << global_results[2] << endl;
+        file << "    MPI Trans: " << global_results[3] << endl;
+        file << "    MPI Sync: " << global_results[4] << endl;
+        file << "    Merge: " << global_results[5] << endl;
+        file << "    STL sort: " << global_results[6] << endl;
+        auto avg_total = std::accumulate(global_results, global_results + 7, 0.0);
+        file << "    Total: " << avg_total << endl;
         file.close();
     }
 #endif
 
     MPI_Finalize();
+
+#ifdef PERF
+    if(rank == 0) {
+        auto main_end = chrono::high_resolution_clock::now();
+        auto total_time = chrono::duration_cast<chrono::nanoseconds>(main_end - main_start).count();
+        cout << "Total time: " << total_time << " ns" << endl;
+        cout << "Total time: " << (total_time/1e9) << " s" << endl;
+    }
+#endif
     return 0;
 }
