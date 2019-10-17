@@ -4,8 +4,8 @@ using namespace std;
 
 OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
                  const char *output_file)
-    : rank(rank), task_num(task_num), main_buffer(rank % 2 ? buffer1 : buffer0),
-      input_file(input_file), output_file(output_file) {
+    : rank(rank), task_num(task_num), main_buffer(rank % 2 ? odd_buffer : even_buffer),
+      input_file(input_file), output_file(output_file), task_scheduler(2) {
 
     // Data partition
     num_per_task = file_size / task_num;
@@ -39,10 +39,9 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
 #ifdef PERF
             auto mem_start = chrono::high_resolution_clock::now();
 #endif
-            buffer0 = new float[size];
-            buffer1 = nullptr;
+            even_buffer = new float[size]{0};
+            odd_buffer = nullptr;
             neighbor_buffer = nullptr;
-            std::fill_n(buffer0, size, 0);
 #ifdef PERF
             auto mem_end = chrono::high_resolution_clock::now();
             mem_time =
@@ -54,14 +53,16 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
             offset = 0;
             left_size = 0;
             right_size = 0;
-            buffer0 = nullptr;
-            buffer1 = nullptr;
+            even_buffer = nullptr;
+            odd_buffer = nullptr;
             neighbor_buffer = nullptr;
         }
     } else {
         schedule = parallel;
+        // remaining parts will be average distributed
         size =
-            num_per_task + (rank < res); // remaining parts will divided by all
+            num_per_task + (rank < res); 
+        // Calculate read/write offset 
         offset = num_per_task * rank + std::min(rank, res);
         // Calculate left/right buffer size
         left_size = num_per_task + ((rank - 1) < res);
@@ -70,12 +71,9 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
 #ifdef PERF
         auto mem_start = chrono::high_resolution_clock::now();
 #endif
-        neighbor_buffer = new float[std::max(left_size, right_size)];
-        buffer0 = new float[size];
-        buffer1 = new float[size];
-        std::fill_n(neighbor_buffer, left_size, 0);
-        std::fill_n(buffer0, size, 0);
-        std::fill_n(buffer1, size, 0);
+        neighbor_buffer = new float[std::max(left_size, right_size)]{0};
+        even_buffer = new float[size]{0};
+        odd_buffer = new float[size]{0};
 #ifdef PERF
         auto mem_end = chrono::high_resolution_clock::now();
         mem_time =
@@ -87,12 +85,12 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
 
 OE_sort::~OE_sort() {
     if (schedule == parallel) {
-        delete[](buffer0);
-        delete[](buffer1);
+        delete[](even_buffer);
+        delete[](odd_buffer);
         delete[](neighbor_buffer);
     } else if (schedule == single) {
         if (rank == 0) {
-            delete[](buffer0);
+            delete[](even_buffer);
         }
     }
 }
@@ -125,7 +123,7 @@ void OE_sort::single_read_file() {
     MPI_File_open(MPI_COMM_WORLD, input_file, MPI_MODE_RDONLY, MPI_INFO_NULL,
                   &fh);
     if (rank == 0) {
-        MPI_File_read_at(fh, 0, buffer0, size, MPI_FLOAT, MPI_STATUS_IGNORE);
+        MPI_File_read_at(fh, 0, even_buffer, size, MPI_FLOAT, MPI_STATUS_IGNORE);
     }
     MPI_File_close(&fh);
 
@@ -166,7 +164,7 @@ void OE_sort::single_write_file() {
     MPI_File_open(MPI_COMM_WORLD, output_file,
                   MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
     if (rank == 0) {
-        MPI_File_write_at(fh, 0, buffer0, size, MPI_FLOAT, MPI_STATUS_IGNORE);
+        MPI_File_write_at(fh, 0, even_buffer, size, MPI_FLOAT, MPI_STATUS_IGNORE);
     }
     MPI_File_close(&fh);
 
@@ -188,12 +186,14 @@ void OE_sort::parallel_sort() {
 #endif
 
     // use STL to sort local content
-    if(size < 1500){
-        std::sort(main_buffer, main_buffer + size);
-    }
-    else {
-        std::sort(std::execution::par, main_buffer, main_buffer + size);
-    }
+    // if(size < 1500){
+    //     std::sort(main_buffer, main_buffer + size);
+    // }
+    // else {
+    //     std::sort(std::execution::par, main_buffer, main_buffer + size);
+    // }
+    std::sort(std::execution::par, main_buffer, main_buffer + size);
+    //std::sort(main_buffer, main_buffer + size);
 
 #ifdef PERF
     auto stl_end = chrono::high_resolution_clock::now();
@@ -221,6 +221,7 @@ void OE_sort::parallel_sort() {
                                  sync_end - sync_start)
                                  .count();
 #endif
+
         }
     } else {
         while (not global_sorted) {
@@ -252,12 +253,14 @@ void OE_sort::single_sort() {
 
     if (rank == 0) {
         // use STL to sort local content
-        if(size < 1500){
-            std::sort(main_buffer, main_buffer + size);
-        }
-        else {
-            std::sort(std::execution::par, main_buffer, main_buffer + size);
-        }
+        // if(size < 80000){
+        //     std::sort(main_buffer, main_buffer + size);
+        // }
+        // else {
+        //     std::sort(std::execution::par, main_buffer, main_buffer + size);
+        // }
+        //std::sort(main_buffer, main_buffer + size);
+        std::sort(std::execution::par, main_buffer, main_buffer + size);
 
 #ifdef PERF
         auto stl_end = chrono::high_resolution_clock::now();
@@ -271,7 +274,7 @@ void OE_sort::single_sort() {
 
 bool OE_sort::_do_left() {
     if (rank == 0 || size == 0) {
-        std::swap(buffer0, buffer1);
+        std::swap(even_buffer, odd_buffer);
         return true;
     }
     MPI_Request request;
@@ -282,7 +285,7 @@ bool OE_sort::_do_left() {
 
     MPI_Irecv(neighbor_buffer, left_size, MPI_FLOAT, rank - 1, mpi_tags::right,
               MPI_COMM_WORLD, &request);
-    MPI_Send(buffer1, size, MPI_FLOAT, rank - 1, mpi_tags::left,
+    MPI_Send(odd_buffer, size, MPI_FLOAT, rank - 1, mpi_tags::left,
              MPI_COMM_WORLD);
     MPI_Wait(&request, MPI_STATUS_IGNORE);
 
@@ -292,8 +295,8 @@ bool OE_sort::_do_left() {
         chrono::duration_cast<chrono::nanoseconds>(mpi_end - mpi_start).count();
 #endif
 
-    if (neighbor_buffer[left_size - 1] <= buffer1[0]) {
-        std::swap(buffer0, buffer1);
+    if (neighbor_buffer[left_size - 1] <= odd_buffer[0]) {
+        std::swap(even_buffer, odd_buffer);
         return true;
     }
 
@@ -301,7 +304,7 @@ bool OE_sort::_do_left() {
     auto merge_start = chrono::high_resolution_clock::now();
 #endif
 
-    _merge_large(buffer1, size, neighbor_buffer, left_size, buffer0, size);
+    _merge_large(odd_buffer, size, neighbor_buffer, left_size, even_buffer, size);
 
 #ifdef PERF
     auto merge_end = chrono::high_resolution_clock::now();
@@ -314,8 +317,8 @@ bool OE_sort::_do_left() {
 }
 
 bool OE_sort::_do_right() {
-    if ((rank + 1) == task_num || size == 0 || right_size == 0) {
-        std::swap(buffer0, buffer1);
+    if ((rank + 1) == task_num || size == 0) {
+        std::swap(even_buffer, odd_buffer);
         return true;
     }
     MPI_Request request;
@@ -326,7 +329,7 @@ bool OE_sort::_do_right() {
 
     MPI_Irecv(neighbor_buffer, right_size, MPI_FLOAT, rank + 1, mpi_tags::left,
               MPI_COMM_WORLD, &request);
-    MPI_Send(buffer0, size, MPI_FLOAT, rank + 1, mpi_tags::right,
+    MPI_Send(even_buffer, size, MPI_FLOAT, rank + 1, mpi_tags::right,
              MPI_COMM_WORLD);
     MPI_Wait(&request, MPI_STATUS_IGNORE);
 
@@ -336,8 +339,8 @@ bool OE_sort::_do_right() {
         chrono::duration_cast<chrono::nanoseconds>(mpi_end - mpi_start).count();
 #endif
 
-    if (buffer0[size - 1] <= neighbor_buffer[0]) {
-        std::swap(buffer0, buffer1);
+    if (even_buffer[size - 1] <= neighbor_buffer[0]) {
+        std::swap(even_buffer, odd_buffer);
         return true;
     }
 
@@ -345,7 +348,7 @@ bool OE_sort::_do_right() {
     auto merge_start = chrono::high_resolution_clock::now();
 #endif
 
-    _merge_small(buffer0, size, neighbor_buffer, right_size, buffer1, size);
+    _merge_small(even_buffer, size, neighbor_buffer, right_size, odd_buffer, size);
 
 #ifdef PERF
     auto merge_end = chrono::high_resolution_clock::now();
