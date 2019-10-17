@@ -187,13 +187,13 @@ void OE_sort::parallel_sort() {
     auto stl_start = chrono::high_resolution_clock::now();
 #endif
 
-#ifdef PARA_STL
-    // std::sort(pstl::execution::par_unseq, main_buffer, main_buffer + size);
-    __gnu_parallel::sort(main_buffer, main_buffer + size);
-#else
     // use STL to sort local content
-    std::sort(main_buffer, main_buffer + size);
-#endif
+    if(size < 1500){
+        std::sort(main_buffer, main_buffer + size);
+    }
+    else {
+        std::sort(std::execution::par, main_buffer, main_buffer + size);
+    }
 
 #ifdef PERF
     auto stl_end = chrono::high_resolution_clock::now();
@@ -205,9 +205,7 @@ void OE_sort::parallel_sort() {
     if (rank % 2 == 1) {
         while (not global_sorted) {
             local_sorted = true;
-            bool local_sorted_1 = not _do_left();
-            bool local_sorted_2 = not _do_right();
-            local_sorted = (local_sorted_1 & local_sorted_2);
+            local_sorted &= _do_left() & _do_right();
 
 #ifdef PERF
             auto sync_start = chrono::high_resolution_clock::now();
@@ -227,9 +225,7 @@ void OE_sort::parallel_sort() {
     } else {
         while (not global_sorted) {
             local_sorted = true;
-            bool local_sorted_1 = not _do_right();
-            bool local_sorted_2 = not _do_left();
-            local_sorted = (local_sorted_1 & local_sorted_2);
+            local_sorted &= _do_right() & _do_left();
 
 #ifdef PERF
             auto sync_start = chrono::high_resolution_clock::now();
@@ -255,13 +251,13 @@ void OE_sort::single_sort() {
 #endif
 
     if (rank == 0) {
-#ifdef PARA_STL
-        // std::sort(pstl::execution::par_unseq, buffer0, buffer0 + size);
-        __gnu_parallel::sort(buffer0, buffer0 + size);
-#else
         // use STL to sort local content
-        std::sort(buffer0, buffer0 + size);
-#endif
+        if(size < 1500){
+            std::sort(main_buffer, main_buffer + size);
+        }
+        else {
+            std::sort(std::execution::par, main_buffer, main_buffer + size);
+        }
 
 #ifdef PERF
         auto stl_end = chrono::high_resolution_clock::now();
@@ -269,13 +265,14 @@ void OE_sort::single_sort() {
             chrono::duration_cast<chrono::nanoseconds>(stl_end - stl_start)
                 .count();
 #endif
+
     }
 }
 
 bool OE_sort::_do_left() {
     if (rank == 0 || size == 0) {
         std::swap(buffer0, buffer1);
-        return false;
+        return true;
     }
     MPI_Request request;
 
@@ -297,7 +294,7 @@ bool OE_sort::_do_left() {
 
     if (neighbor_buffer[left_size - 1] <= buffer1[0]) {
         std::swap(buffer0, buffer1);
-        return false;
+        return true;
     }
 
 #ifdef PERF
@@ -313,13 +310,13 @@ bool OE_sort::_do_left() {
             .count();
 #endif
 
-    return true;
+    return false;
 }
 
 bool OE_sort::_do_right() {
     if ((rank + 1) == task_num || size == 0 || right_size == 0) {
         std::swap(buffer0, buffer1);
-        return false;
+        return true;
     }
     MPI_Request request;
 
@@ -341,7 +338,7 @@ bool OE_sort::_do_right() {
 
     if (buffer0[size - 1] <= neighbor_buffer[0]) {
         std::swap(buffer0, buffer1);
-        return false;
+        return true;
     }
 
 #ifdef PERF
@@ -357,7 +354,7 @@ bool OE_sort::_do_right() {
             .count();
 #endif
 
-    return true;
+    return false;
 }
 
 void OE_sort::_merge_small(float *src1, ssize_t src1_size, float *src2,
