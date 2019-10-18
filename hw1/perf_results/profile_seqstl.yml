@@ -1,0 +1,324 @@
+cases/01.in:
+    Mem allocate: 1076
+    MPI Read: 8.48402e+06
+    MPI Write: 3.52051e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 350
+    Total: 1.2006e+07
+cases/02.in:
+    Mem allocate: 1375
+    MPI Read: 1.1351e+07
+    MPI Write: 3.08841e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 666
+    Total: 1.44414e+07
+cases/03.in:
+    Mem allocate: 1740
+    MPI Read: 7.64422e+07
+    MPI Write: 3.98554e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 1073
+    Total: 8.04305e+07
+cases/04.in:
+    Mem allocate: 1147
+    MPI Read: 2.54062e+06
+    MPI Write: 3.16265e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 3215
+    Total: 5.70763e+06
+cases/05.in:
+    Mem allocate: 1681
+    MPI Read: 6.78218e+06
+    MPI Write: 3.07951e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 2417
+    Total: 9.86579e+06
+cases/06.in:
+    Mem allocate: 54892
+    MPI Read: 9.94928e+06
+    MPI Write: 7.92773e+06
+    MPI Trans: 793432
+    MPI Sync: 407475
+    Merge: 224215
+    STL sort: 570106
+    Total: 1.99271e+07
+cases/07.in:
+    Mem allocate: 33623.7
+    MPI Read: 3.91895e+06
+    MPI Write: 3.62679e+06
+    MPI Trans: 202806
+    MPI Sync: 79568.7
+    Merge: 68860.7
+    STL sort: 425238
+    Total: 8.35584e+06
+cases/08.in:
+    Mem allocate: 24098.6
+    MPI Read: 8.20315e+06
+    MPI Write: 8.50556e+06
+    MPI Trans: 100771
+    MPI Sync: 174515
+    Merge: 0
+    STL sort: 72367.8
+    Total: 1.70805e+07
+cases/09.in:
+    Mem allocate: 35357.2
+    MPI Read: 1.37842e+07
+    MPI Write: 8.79719e+06
+    MPI Trans: 798643
+    MPI Sync: 486878
+    Merge: 220190
+    STL sort: 305702
+    Total: 2.44282e+07
+cases/10.in:
+    Mem allocate: 14708.7
+    MPI Read: 1.27614e+07
+    MPI Write: 8.80398e+06
+    MPI Trans: 559348
+    MPI Sync: 1.62369e+06
+    Merge: 142960
+    STL sort: 130342
+    Total: 2.40365e+07
+cases/11.in:
+    Mem allocate: 1017
+    MPI Read: 1.17686e+07
+    MPI Write: 3.23695e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 858
+    Total: 1.50074e+07
+cases/12.in:
+    Mem allocate: 663
+    MPI Read: 1.77718e+06
+    MPI Write: 4.55243e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 405
+    Total: 6.33067e+06
+cases/13.in:
+    Mem allocate: 1039
+    MPI Read: 1.17406e+07
+    MPI Write: 3.38666e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 6903
+    Total: 1.51352e+07
+cases/14.in:
+    Mem allocate: 9160.47
+    MPI Read: 2.24706e+07
+    MPI Write: 7.83783e+06
+    MPI Trans: 224724
+    MPI Sync: 328978
+    Merge: 36522.5
+    STL sort: 58870.5
+    Total: 3.09666e+07
+cases/15.in:
+    Mem allocate: 25743
+    MPI Read: 1.13616e+07
+    MPI Write: 4.34439e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 152361
+    Total: 1.58841e+07
+cases/16.in:
+    Mem allocate: 36338.4
+    MPI Read: 2.52005e+06
+    MPI Write: 7.33407e+06
+    MPI Trans: 664624
+    MPI Sync: 843425
+    Merge: 2.08347e+06
+    STL sort: 2.93216e+06
+    Total: 1.64141e+07
+cases/17.in:
+    Mem allocate: 181643
+    MPI Read: 1.8784e+07
+    MPI Write: 1.2066e+07
+    MPI Trans: 1.74851e+06
+    MPI Sync: 1.59448e+06
+    Merge: 1.14235e+06
+    STL sort: 2.04829e+06
+    Total: 3.75652e+07
+cases/18.in:
+    Mem allocate: 175385
+    MPI Read: 2.91528e+07
+    MPI Write: 9.04256e+06
+    MPI Trans: 1.46014e+06
+    MPI Sync: 1.24559e+06
+    Merge: 593916
+    STL sort: 1.82085e+06
+    Total: 4.34912e+07
+cases/19.in:
+    Mem allocate: 176081
+    MPI Read: 2.31374e+07
+    MPI Write: 1.08803e+07
+    MPI Trans: 557236
+    MPI Sync: 457998
+    Merge: 90585.6
+    STL sort: 681802
+    Total: 3.59813e+07
+cases/20.in:
+    Mem allocate: 29300
+    MPI Read: 2.37015e+07
+    MPI Write: 3.87617e+06
+    MPI Trans: 0
+    MPI Sync: 0
+    Merge: 0
+    STL sort: 849071
+    Total: 2.84561e+07
+cases/21.in:
+    Mem allocate: 5401.25
+    MPI Read: 1.55006e+07
+    MPI Write: 7.44048e+06
+    MPI Trans: 190635
+    MPI Sync: 287260
+    Merge: 26114.6
+    STL sort: 5786.33
+    Total: 2.34562e+07
+cases/22.in:
+    Mem allocate: 19549
+    MPI Read: 1.45077e+07
+    MPI Write: 8.11435e+06
+    MPI Trans: 1.18235e+06
+    MPI Sync: 2.12024e+06
+    Merge: 2.63958e+06
+    STL sort: 1.59964e+06
+    Total: 3.01834e+07
+cases/23.in:
+    Mem allocate: 140398
+    MPI Read: 1.53139e+07
+    MPI Write: 9.44101e+06
+    MPI Trans: 1.37379e+06
+    MPI Sync: 930190
+    Merge: 869074
+    STL sort: 1.22373e+06
+    Total: 2.92921e+07
+cases/24.in:
+    Mem allocate: 158427
+    MPI Read: 2.01293e+07
+    MPI Write: 8.38819e+06
+    MPI Trans: 1.33676e+06
+    MPI Sync: 928756
+    Merge: 560250
+    STL sort: 1.54652e+06
+    Total: 3.30482e+07
+cases/25.in:
+    Mem allocate: 155500
+    MPI Read: 1.55841e+07
+    MPI Write: 9.73279e+06
+    MPI Trans: 446276
+    MPI Sync: 365735
+    Merge: 101138
+    STL sort: 658020
+    Total: 2.70435e+07
+cases/26.in:
+    Mem allocate: 146849
+    MPI Read: 1.7744e+07
+    MPI Write: 1.07766e+07
+    MPI Trans: 291838
+    MPI Sync: 195468
+    Merge: 0
+    STL sort: 249728
+    Total: 2.94045e+07
+cases/27.in:
+    Mem allocate: 68143.2
+    MPI Read: 1.74581e+07
+    MPI Write: 8.90348e+06
+    MPI Trans: 1.4223e+06
+    MPI Sync: 839078
+    Merge: 449869
+    STL sort: 727247
+    Total: 2.98683e+07
+cases/28.in:
+    Mem allocate: 364728
+    MPI Read: 1.7373e+07
+    MPI Write: 1.30615e+07
+    MPI Trans: 3.62185e+06
+    MPI Sync: 1.09399e+06
+    Merge: 2.50781e+06
+    STL sort: 812456
+    Total: 3.88353e+07
+cases/29.in:
+    Mem allocate: 362976
+    MPI Read: 1.62351e+07
+    MPI Write: 1.09899e+07
+    MPI Trans: 7.48858e+06
+    MPI Sync: 1.88629e+07
+    Merge: 3.8248e+07
+    STL sort: 3.43238e+07
+    Total: 1.26511e+08
+cases/30.in:
+    Mem allocate: 2.24071e+07
+    MPI Read: 2.83196e+07
+    MPI Write: 2.10675e+08
+    MPI Trans: 2.48373e+08
+    MPI Sync: 7.6871e+07
+    Merge: 1.63784e+08
+    STL sort: 2.81964e+08
+    Total: 1.03239e+09
+cases/31.in:
+    Mem allocate: 2.15953e+07
+    MPI Read: 2.36644e+07
+    MPI Write: 2.32834e+08
+    MPI Trans: 2.26694e+08
+    MPI Sync: 9.00512e+07
+    Merge: 1.08114e+08
+    STL sort: 2.79373e+08
+    Total: 9.82326e+08
+cases/32.in:
+    Mem allocate: 2.31655e+07
+    MPI Read: 2.60982e+07
+    MPI Write: 2.33356e+08
+    MPI Trans: 4.22435e+07
+    MPI Sync: 7.68582e+06
+    Merge: 1.42235e+07
+    STL sort: 9.92618e+07
+    Total: 4.46034e+08
+cases/33.in:
+    Mem allocate: 3.35412e+08
+    MPI Read: 1.64877e+08
+    MPI Write: 2.224e+09
+    MPI Trans: 2.18623e+09
+    MPI Sync: 6.10888e+08
+    Merge: 1.3684e+09
+    STL sort: 5.57024e+09
+    Total: 1.24601e+10
+cases/34.in:
+    Mem allocate: 3.34848e+08
+    MPI Read: 1.61469e+08
+    MPI Write: 2.14112e+09
+    MPI Trans: 2.28894e+09
+    MPI Sync: 8.27383e+08
+    Merge: 8.47088e+08
+    STL sort: 5.40177e+09
+    Total: 1.20026e+10
+cases/35.in:
+    Mem allocate: 3.40855e+08
+    MPI Read: 1.65434e+08
+    MPI Write: 2.25116e+09
+    MPI Trans: 2.16806e+09
+    MPI Sync: 5.84204e+08
+    Merge: 1.51455e+09
+    STL sort: 5.60456e+09
+    Total: 1.26288e+10
+cases/36.in:
+    Mem allocate: 3.35977e+08
+    MPI Read: 1.60994e+08
+    MPI Write: 2.19704e+09
+    MPI Trans: 2.50673e+09
+    MPI Sync: 9.70346e+08
+    Merge: 1.98349e+08
+    STL sort: 1.34237e+09
+    Total: 7.71181e+09
