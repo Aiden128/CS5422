@@ -204,8 +204,25 @@ void OE_sort::parallel_sort() {
     // Split odd rank & even rank
     if (rank % 2 == 1) {
         while (not global_sorted) {
-            local_sorted = true;
-            local_sorted &= _do_left() & _do_right();
+            if (size > 40'000'000){
+                local_sorted = true;
+                local_sorted &= _do_left() & _do_right();
+                local_sorted = true;
+                local_sorted &= _do_left() & _do_right();
+                local_sorted = true;
+                local_sorted &= _do_left() & _do_right();
+                local_sorted = true;
+                local_sorted &= _do_left() & _do_right();
+                local_sorted = true;
+                local_sorted &= _do_left() & _do_right();
+                local_sorted = true;
+                local_sorted &= _do_left() & _do_right();
+                local_sorted = true;
+                local_sorted &= _do_left() & _do_right();
+            } else {
+                local_sorted = true;
+                local_sorted &= _do_left() & _do_right();
+            }
 
 #ifdef PERF
             auto sync_start = chrono::high_resolution_clock::now();
@@ -225,9 +242,25 @@ void OE_sort::parallel_sort() {
         }
     } else {
         while (not global_sorted) {
-            local_sorted = true;
-            local_sorted &= _do_right() & _do_left();
-
+            if (size > 40'000'000){
+                local_sorted = true;
+                local_sorted &= _do_right() & _do_left();
+                local_sorted = true;
+                local_sorted &= _do_right() & _do_left();
+                local_sorted = true;
+                local_sorted &= _do_right() & _do_left();
+                local_sorted = true;
+                local_sorted &= _do_right() & _do_left();
+                local_sorted = true;
+                local_sorted &= _do_right() & _do_left();
+                local_sorted = true;
+                local_sorted &= _do_right() & _do_left();
+                local_sorted = true;
+                local_sorted &= _do_right() & _do_left();
+            } else {
+                local_sorted = true;
+                local_sorted &= _do_right() & _do_left();
+            }
 #ifdef PERF
             auto sync_start = chrono::high_resolution_clock::now();
 #endif

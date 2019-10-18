@@ -44,8 +44,6 @@ int main(int argc, char **argv) {
     local_results[6] = oe.stl_sort_time;
     MPI_Reduce(&local_results, &global_results, 7, MPI_DOUBLE, MPI_SUM, 0,
                MPI_COMM_WORLD);
-    // cout << "Rank: " << rank << " read: " << oe.read_time << " ns" << endl;
-    // cout << "Rank: " << rank << " write: " << oe.write_time << " ns" << endl;
     if (rank == 0) {
         if (oe.schedule == parallel) {
             for (int i = 0; i < 7; ++i) {
@@ -60,6 +58,7 @@ int main(int argc, char **argv) {
             // If found then erase it from string
             test_filename.erase(pos, 3);
         }
+
         file.open("profile.yml", std::ofstream::out | std::ofstream::app);
         file << test_filename << ":" << endl; 
         file << "    Mem allocate: " << global_results[0] << endl;
