@@ -185,15 +185,7 @@ void OE_sort::parallel_sort() {
     auto stl_start = chrono::high_resolution_clock::now();
 #endif
 
-    // use STL to sort local content
-    // if(size < 1500){
-    //     std::sort(main_buffer, main_buffer + size);
-    // }
-    // else {
-    //     std::sort(std::execution::par, main_buffer, main_buffer + size);
-    // }
-    std::sort(std::execution::par, main_buffer, main_buffer + size);
-    //std::sort(main_buffer, main_buffer + size);
+    std::sort(main_buffer, main_buffer + size);
 
 #ifdef PERF
     auto stl_end = chrono::high_resolution_clock::now();
@@ -285,16 +277,7 @@ void OE_sort::single_sort() {
 #endif
 
     if (rank == 0) {
-        // use STL to sort local content
-        // if(size < 80000){
-        //     std::sort(main_buffer, main_buffer + size);
-        // }
-        // else {
-        //     std::sort(std::execution::par, main_buffer, main_buffer + size);
-        // }
-        //std::sort(main_buffer, main_buffer + size);
-        std::sort(std::execution::par, main_buffer, main_buffer + size);
-
+        std::sort(main_buffer, main_buffer + size);
 #ifdef PERF
         auto stl_end = chrono::high_resolution_clock::now();
         stl_sort_time =
