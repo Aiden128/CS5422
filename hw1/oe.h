@@ -57,6 +57,7 @@ private:
     const char *input_file;
     const char *output_file;
     tbb::task_scheduler_init task_scheduler;
+    MPI_Request request;
 
     int num_per_task; // Number of floats handled by a rank
     int res;          // Remaining part
@@ -70,10 +71,10 @@ private:
 
     bool _do_left();
     bool _do_right();
-    void _merge_small(float *src1, ssize_t src1_size, float *src2,
-                      ssize_t src2_size, float *dest, ssize_t dest_size);
-    void _merge_large(float *src1, ssize_t src1_size, float *src2,
-                      ssize_t src2_size, float *dest, ssize_t dest_size);
+    void _merge_small(float *src1, size_t src1_size, float *src2,
+                      size_t src2_size, float *dest, size_t dest_size);
+    void _merge_large(float *src1, size_t src1_size, float *src2,
+                      size_t src2_size, float *dest, size_t dest_size);
 };
 
 #endif

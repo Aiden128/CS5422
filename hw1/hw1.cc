@@ -91,7 +91,6 @@ int main(int argc, char **argv) {
         auto main_end = chrono::high_resolution_clock::now();
         auto total_time = chrono::duration_cast<chrono::nanoseconds>(main_end - main_start).count();
         cout << "Total time: " << total_time << " ns" << endl;
-        cout << "Total time: " << (total_time/1e9) << " s" << endl;
     }
 #endif
     return 0;
