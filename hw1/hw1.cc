@@ -2,19 +2,13 @@
 // Author: Jerry ZJ
 // Date: 2019/09/27
 #include "oe.h"
-#ifdef DEBUG
 #include <cassert>
-#endif
 using namespace std;
 
 int main(int argc, char **argv) {
 
-#ifdef DEBUG
     assert(argc == 4); // Make sure arguments are ready
-#endif
-#ifdef PERF
-    auto main_start = chrono::high_resolution_clock::now();
-#endif
+
     int rank(0), task_num(0);
     // Start processing
     MPI_Init(&argc, &argv);
@@ -23,16 +17,9 @@ int main(int argc, char **argv) {
 
     OE_sort oe(rank, task_num, stoi(argv[1]), argv[2], argv[3]);
 
-    if (oe.schedule == parallel) {
-        oe.parallel_read_file();
-        oe.parallel_sort();
-        oe.parallel_write_file();
-    } else if (oe.schedule == single) {
-        oe.single_read_file();
-        oe.single_sort();
-        oe.single_write_file();
-    }
-
+    oe.read_file();
+    oe.sort();
+    oe.write_file();
 #ifdef PERF
     double local_results[7], global_results[7];
     local_results[0] = oe.mem_time;
@@ -45,11 +32,11 @@ int main(int argc, char **argv) {
     MPI_Reduce(&local_results, &global_results, 7, MPI_DOUBLE, MPI_SUM, 0,
                MPI_COMM_WORLD);
     if (rank == 0) {
-        if (oe.schedule == parallel) {
-            for (int i = 0; i < 7; ++i) {
+        
+        for (int i = 0; i < 7; ++i) {
                 global_results[i] /= task_num;
-            }
         }
+        
         ofstream file;
         ofstream csv_file;
         string test_filename(argv[2]);
@@ -83,15 +70,6 @@ int main(int argc, char **argv) {
         csv_file.close();
     }
 #endif
-
     MPI_Finalize();
-
-#ifdef PERF
-    if(rank == 0) {
-        auto main_end = chrono::high_resolution_clock::now();
-        auto total_time = chrono::duration_cast<chrono::nanoseconds>(main_end - main_start).count();
-        cout << "Total time: " << total_time << " ns" << endl;
-    }
-#endif
     return 0;
 }
