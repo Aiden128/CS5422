@@ -185,7 +185,8 @@ void OE_sort::parallel_sort() {
     auto stl_start = chrono::high_resolution_clock::now();
 #endif
 
-    std::sort(main_buffer, main_buffer + size);
+    //std::sort(main_buffer, main_buffer + size);
+    boost::sort::spreadsort::float_sort(main_buffer, main_buffer + size);
 
 #ifdef PERF
     auto stl_end = chrono::high_resolution_clock::now();
@@ -196,25 +197,8 @@ void OE_sort::parallel_sort() {
     // Split odd rank & even rank
     if (rank % 2 == 1) {
         while (not global_sorted) {
-            if (size > 40'000'000){
-                local_sorted = true;
-                local_sorted &= _do_left() & _do_right();
-                local_sorted = true;
-                local_sorted &= _do_left() & _do_right();
-                local_sorted = true;
-                local_sorted &= _do_left() & _do_right();
-                local_sorted = true;
-                local_sorted &= _do_left() & _do_right();
-                local_sorted = true;
-                local_sorted &= _do_left() & _do_right();
-                local_sorted = true;
-                local_sorted &= _do_left() & _do_right();
-                local_sorted = true;
-                local_sorted &= _do_left() & _do_right();
-            } else {
-                local_sorted = true;
-                local_sorted &= _do_left() & _do_right();
-            }
+            local_sorted = true;
+            local_sorted &= _do_left() & _do_right();
 
 #ifdef PERF
             auto sync_start = chrono::high_resolution_clock::now();
@@ -230,29 +214,12 @@ void OE_sort::parallel_sort() {
                                  sync_end - sync_start)
                                  .count();
 #endif
-
         }
     } else {
         while (not global_sorted) {
-            if (size > 40'000'000){
-                local_sorted = true;
-                local_sorted &= _do_right() & _do_left();
-                local_sorted = true;
-                local_sorted &= _do_right() & _do_left();
-                local_sorted = true;
-                local_sorted &= _do_right() & _do_left();
-                local_sorted = true;
-                local_sorted &= _do_right() & _do_left();
-                local_sorted = true;
-                local_sorted &= _do_right() & _do_left();
-                local_sorted = true;
-                local_sorted &= _do_right() & _do_left();
-                local_sorted = true;
-                local_sorted &= _do_right() & _do_left();
-            } else {
-                local_sorted = true;
-                local_sorted &= _do_right() & _do_left();
-            }
+            local_sorted = true;
+            local_sorted &= _do_right() & _do_left();
+
 #ifdef PERF
             auto sync_start = chrono::high_resolution_clock::now();
 #endif
@@ -277,7 +244,9 @@ void OE_sort::single_sort() {
 #endif
 
     if (rank == 0) {
-        std::sort(main_buffer, main_buffer + size);
+        //std::sort(main_buffer, main_buffer + size);
+        boost::sort::spreadsort::float_sort(main_buffer, main_buffer + size);
+
 
 #ifdef PERF
         auto stl_end = chrono::high_resolution_clock::now();
