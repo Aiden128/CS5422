@@ -28,13 +28,11 @@ In my implementation, to enhance data throughput and reduce the number of transm
 
 The numbers from the neighbor ranks will be stored at ``neighbor_buffer``.
 
-<img src="/Users/jerry/Documents/CS5422/hw1/README.assets/Untitled.png" alt="ra" style="zoom:50%;" />
+<img src="README.assets/Untitled.png" style="zoom:72%;" />
 
+### Merge function
 
-
-###Merge function
-
-After data exchange, the merge function will merge the numbers in ``main_buffer`` and ``neighbor_buffer``, and place the smaller numbers in ``odd_buffer`` (rank ID is even) or ``even_buffer`` (rank ID is odd). 
+After data exchange, the merge function will merge the numbers in ``main_buffer`` and ``neighbor_buffer``, and place the smaller numbers in ``odd_buffer`` (rank ID is even) or ``even_buffer`` (rank ID is odd).
 
 The pseudo code of the merge function is shown below (merge smaller numbers in this case)
 
@@ -42,14 +40,14 @@ The pseudo code of the merge function is shown below (merge smaller numbers in t
 void merge (source1, source2, dest) {
     inputs source1, source2 : list
     output dest : list
-    
+
     while(source1, source2 not empty && dest not full) {
         if (head(source1) < head(source2)) {
-        	append head(source1) to dest
+            append head(source1) to dest
             drop head(source1)
         }
     }
-    
+
     if(dest is not full) {
         if (source1 not empty) {
             fill dest with source1
@@ -77,7 +75,7 @@ The testing environment is apollo cluster, provided by TA.
 
 ##### Odd-Even Sort
 
-I use C++ ``chrono`` library to mesure the following items, and dump the measured items in YAML format and CSV format. 
+I use C++ ``chrono`` library to mesure the following items, and dump the measured items in YAML format and CSV format.
 
 To enable measurement, add ``-DPERF`` in compiler flags.
 
@@ -103,11 +101,11 @@ The range of input size is from 1 to 10,000,000, and each method is tested 100 t
 
 ## Experiment & Analysis
 
-*   Sorting library comparison
+* Sorting library comparison
 
     In this experiment, I try to examine which sorting function runs fastest.
 
-![Sorting Comparison (/Users/jerry/Documents/CS5422/hw1/README.assets/Sorting Comparison (log-log scale)-1571211.png)](/Users/jerry/Downloads/Sorting Comparison (log-log scale).png)
+![](README.assets/Sorting Comparison (log-log scale).png)
 
 The plot above shows that the ``float_sort`` function in Boost library has the smallest runtime in average compare to STL. Therefore, I use it in my implementation to achieve best performance.
 
