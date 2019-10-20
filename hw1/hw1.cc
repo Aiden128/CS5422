@@ -2,12 +2,16 @@
 // Author: Jerry ZJ
 // Date: 2019/09/27
 #include "oe.h"
+#ifdef DEBUG
 #include <cassert>
+#endif
 using namespace std;
 
 int main(int argc, char **argv) {
 
+#ifdef DEBUG
     assert(argc == 4); // Make sure arguments are ready
+#endif
 
     int rank(0), task_num(0);
     // Start processing
@@ -20,6 +24,7 @@ int main(int argc, char **argv) {
     oe.read_file();
     oe.sort();
     oe.write_file();
+
 #ifdef PERF
     double local_results[7], global_results[7];
     local_results[0] = oe.mem_time;
@@ -32,11 +37,11 @@ int main(int argc, char **argv) {
     MPI_Reduce(&local_results, &global_results, 7, MPI_DOUBLE, MPI_SUM, 0,
                MPI_COMM_WORLD);
     if (rank == 0) {
-        
+
         for (int i = 0; i < 7; ++i) {
-                global_results[i] /= task_num;
+            global_results[i] /= task_num;
         }
-        
+
         ofstream file;
         ofstream csv_file;
         string test_filename(argv[2]);
@@ -47,15 +52,16 @@ int main(int argc, char **argv) {
         }
 
         file.open("profile.yml", std::ofstream::out | std::ofstream::app);
-        file << test_filename << ":" << endl; 
+        file << test_filename << ":" << endl;
         file << "    Mem allocate: " << global_results[0] << endl;
-        file << "    MPI Read: " << global_results[1]  << endl;
+        file << "    MPI Read: " << global_results[1] << endl;
         file << "    MPI Write: " << global_results[2] << endl;
         file << "    MPI Trans: " << global_results[3] << endl;
         file << "    MPI Sync: " << global_results[4] << endl;
         file << "    Merge: " << global_results[5] << endl;
         file << "    STL sort: " << global_results[6] << endl;
-        auto avg_total = std::accumulate(global_results, global_results + 7, 0.0);
+        auto avg_total =
+            std::accumulate(global_results, global_results + 7, 0.0);
         file << "    Total: " << avg_total << endl;
         file.close();
         csv_file.open("profile.csv", std::ofstream::out | std::ofstream::app);
