@@ -12,7 +12,9 @@ int main(int argc, char **argv) {
 #ifdef DEBUG
     assert(argc == 4); // Make sure arguments are ready
 #endif
-
+#ifdef PERF
+    auto main_start = chrono::high_resolution_clock::now();
+#endif
     int rank(0), task_num(0);
     // Start processing
     MPI_Init(&argc, &argv);
@@ -77,5 +79,13 @@ int main(int argc, char **argv) {
     }
 #endif
     MPI_Finalize();
+#ifdef PERF
+    if (rank == 0) {
+        auto main_end = chrono::high_resolution_clock::now();
+        auto main_time =
+            chrono::duration_cast<chrono::nanoseconds>(main_end - main_start).count();
+        cout << "Elapse time: " << main_time << " ns" << endl;
+    }
+#endif
     return 0;
 }
