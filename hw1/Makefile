@@ -1,5 +1,5 @@
 CXX := mpicxx
-CXXFLAGS := -cxx=clang++ -O3 -Wall -std=c++17 -march=native
+CXXFLAGS := -cxx=clang++ -O3 -std=c++17 -march=native -flto
 TARGET := hw1
 SRCS := hw1.cc oe.cc
 OBJS := hw1.o oe.o 
