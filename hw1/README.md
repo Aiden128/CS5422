@@ -34,26 +34,26 @@ The numbers from the neighbor ranks will be stored at ``neighbor_buffer``.
 
 After data exchange, the merge function will merge the numbers in ``main_buffer`` and ``neighbor_buffer``, and place the smaller numbers in ``odd_buffer`` (rank ID is even) or ``even_buffer`` (rank ID is odd).
 
-The pseudo code of the merge function is shown below (merge smaller numbers in this case)
+The pseudo code of the merge function is shown below (merge takes smaller numbers in this case)
 
 ```c
-void merge (source1, source2, dest) {
-    inputs source1, source2 : list
-    output dest : list
+void merge (source1, source2, destination) {
+    input: source1, source2 //list
+    output: destination //list
 
-    while(source1, source2 not empty && dest not full) {
+    while(source1, source2 not empty && destination not full) {
         if (head(source1) < head(source2)) {
-            append head(source1) to dest
+            append head(source1) to destination
             drop head(source1)
         }
     }
 
-    if(dest is not full) {
+    if(destination is not full) {
         if (source1 not empty) {
-            fill dest with source1
+            fill destination with source1
         }
         else {
-            fill dest with source2
+            fill destination with source2
         }
     }
 }
@@ -69,7 +69,11 @@ In order to know whether the sorting can be terminated or not, I use the ``MPI_A
 
 #### System Spec
 
-The testing environment is apollo cluster, provided by TA. 	
+The testing environment is apollo cluster, provided by TA. 
+
+#### Software Spec
+
+LLVM 8.0.0, intel TBB library, Boost 1.69
 
 #### Performance Metrics
 
@@ -91,26 +95,85 @@ To enable measurement, add ``-DPERF`` in compiler flags.
 
 The sum of the measured times is almost equal to the overall runtime (less than 10% error)
 
-I use the seven indices above to generate the percentage stacked histogram, and apply *Amdahl's law* to analyze how can I optimize my codes.
+I use the seven indices above to generate the percentage stacked histogram, the I am able to apply *Amdahl's law* to analyze which part of the program could be optimized.
+
+The runtime settings of the cluster are identical to the config files from TA, using different setting is meaningless. 
+
+I also noticed that Read/ Write time may be affected by whether the cluster is crownded or not, but I don't really care since there is nothing we can do improve its performance.
 
 ##### STL Sort
 
-I perform a profiling with C++ 17 Parallel STL and Boost library ``float_sort``, comparing the runtime of sorting a series of random number, the testing source code is accessible on my GitHub repository.
+I perform profiling with C++ 17 Parallel STL and Boost library ``float_sort``, comparing the runtime of sorting a series of random numbers, the testing source code is accessible on my GitHub repository.
 
-The range of input size is from 1 to 10,000,000, and each method is tested 100 times and take average as the final runtime.
+The range of input size is from 1 to 10,000,000. Each sorting method is tested 100 times and take the average runtime as the final runtime.
 
 ## Experiment & Analysis
 
+* Baseline
+
+    ![Baseline_hist](README.assets/Baseline Histogram.png)
+    
+    ![Baseline runtime](README.assets/Baseline runtime.png)
+    
+    As the result shows, in testcase 1 to 28,  most of the time is spent on file I/O. Since I already apply parallel file I/O technique, I think there is nothing I can do to make them faster.
+    
+    However, case 29 to 36 shows that sorting takes a lot of time. According to Amdahl's Law, it makes sense to me that I should find some way to make STL sort runs faster.
+    
+* Improve CPU utilization in particular cases
+
+    I also noticed that in some cases, a rank will handle a very small amount of data, letting the data transmission time much longer than the sorting time (low CPU utilization). Therefore, I set a threshold, if the scheduling result shows that the numbers handling by a rank is smaller than the threshold, it will automatically use rank 0 to handle all the sorting process.
+
+    ![Improve CPU utilization Histogram](README.assets/Improve CPU utilization Histogram.png)
+
+    ![Improve CPU utilization runtime](README.assets/Improve CPU utilization runtime.png)
+
+    The result shows that in the small cases, the transmission overhead is reduced. But in the worst cases, the overall runtime is increased. I think this is due to the added branches.
+
+* Using Parallel STL
+
+    After searching on the internet, I found that in intel had implemented a **parallel version** of STL, and it had been added to C++ 17 standard. So I use the paralleled version of ``std::sort()`` instead of the sequential version.
+
+    ![Parallel STL Histogram](README.assets/Parallel STL Histogram.png)
+
+    ![Parallel STL runtime](README.assets/Parallel STL runtime.png)
+
+    Unfortunately, using paralleled version of ``std::sort()`` doesn't make anything better. The overall runtime is longer, and spend more proportion of time on sorting (from 44% grows to 47% in case 35).
+
+    I think this is caused by the cluster config that makes all the 12 ranks run on the same node, causing all the threads are competing for CPU time with each other.
+
 * Sorting library comparison
 
-    In this experiment, I try to examine which sorting function runs fastest.
+    Somehow I learned that using Boost library can significantly reduced the sorting time, so I tried to compare it with STL in sequential mode and parallel mode.
 
-![](README.assets/Sorting Comparison (log-log scale).png)
+    ![Sorting Comparison](README.assets/Sorting Comparison (log-log scale).png)
 
 The plot above shows that the ``float_sort`` function in Boost library has the smallest runtime in average compare to STL. Therefore, I use it in my implementation to achieve best performance.
 
-## Experiences & Conclusion
+*   Using Boost Library
 
-A good library helps you a lot!
+    ![Boost Library Histogram](README.assets/Boost Library Histogram.png)
 
-BTW, I think writing Makefile is too complicated, I think CMake can make things easier.
+    ![Boost Library runtime](README.assets/Boost Library runtime.png)
+
+    It's obvious that the sorting time is significantly reduced among other parts, and the runtime is significantly reduced as well!
+
+## Conclusion
+
+![Comparison of all 4 approaches](README.assets/Comparison of all 4 approaches.png)
+
+A good library helps you a lot! Boost library is known as the leading edge C++ standard implementation. In this homework, it really  proves that its dedicated optimization on floating point sorting really helps a lot.
+
+While doing performance optimization, figuring out why an approach didn't works well sometimes takes a lot of time.
+
+BTW, I think writing Makefile is too complicated, a CMakeLists.txt can make things easier.
+
+## Reference
+
+[1]: http://www.training.prace-ri.eu/uploads/tx_pracetmo/pio1.pdf	"MPI Parallel I/O"
+[2]: http://selkie-macalester.org/csinparallel/modules/MPIProgramming/build/html/oddEvenSort/oddEven.html	"Odd-Even Sort MPI"
+[3]: https://www.geeksforgeeks.org/merge-sort/	"Merge Sort"
+[4]: https://software.intel.com/en-us/articles/get-started-with-parallel-stl	"intel Parallel STL"
+[5]: https://www.boost.org/doc/libs/1_67_0/libs/sort/doc/html/sort/single_thread/spreadsort/sort_hpp/float_sort.html	"Boost Float Sort"
+
+
+
