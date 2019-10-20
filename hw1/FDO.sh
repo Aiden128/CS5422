@@ -41,5 +41,6 @@ srun -n 12 -N 1 hw1 536869888 ../cases/35.in ./35.out
 srun -n 12 -N 1 hw1 536869888 ../cases/36.in ./36.out
 
 llvm-profdata merge -output=code.profdata code-*.profraw
+rm *.out *.profraw
 cmake -DCMAKE_BUILD_TYPE=FDOUSE ..
 make -j
