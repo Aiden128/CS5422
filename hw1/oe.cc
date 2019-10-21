@@ -11,13 +11,19 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
     // Data partition
     num_per_task = file_size / task_num;
     res = file_size % task_num;
-    size = num_per_task + (rank < res); // remaining parts will divided by all
+    size = num_per_task + (rank < res);
     offset = num_per_task * rank + std::min(rank, res);
-
     left_size = num_per_task + ((rank - 1) < res);
     right_size = num_per_task + ((rank + 1) < res);
 
 #ifdef PERF
+    mem_time = 0.0;
+    read_time = 0.0;
+    write_time = 0.0;
+    MPI_transmission_time = 0.0;
+    MPI_sync_time = 0.0;
+    merge_time = 0.0;
+    stl_sort_time = 0.0;
     auto mem_start = chrono::high_resolution_clock::now();
 #endif
 
@@ -79,6 +85,7 @@ void OE_sort::write_file() {
     MPI_File_write_at_all(fh, offset * sizeof(float), main_buffer, size,
                           MPI_FLOAT, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
+
 #ifdef PERF
     auto w_end = chrono::high_resolution_clock::now();
     write_time =
@@ -175,10 +182,11 @@ bool OE_sort::_left() {
     if (neighbor_buffer[left_size - 1] <= odd_buffer[0]) {
         std::swap(even_buffer, odd_buffer);
         return true;
-    }
-    _merge_large(odd_buffer, size, neighbor_buffer, left_size, even_buffer,
+    } else {
+        _merge_large(odd_buffer, size, neighbor_buffer, left_size, even_buffer,
                  size);
-    return false;
+        return false;
+    }
 }
 
 bool OE_sort::_right() {
@@ -196,10 +204,6 @@ bool OE_sort::_right() {
     MPI_Irecv(neighbor_buffer, right_size, MPI_FLOAT, rank + 1, mpi_tags::left,
               MPI_COMM_WORLD, &request);
     MPI_Wait(&request, MPI_STATUS_IGNORE);
-    if (even_buffer[size - 1] <= neighbor_buffer[0]) {
-        std::swap(even_buffer, odd_buffer);
-        return true;
-    }
 
 #ifdef PERF
     auto mpi_end = chrono::high_resolution_clock::now();
@@ -207,13 +211,22 @@ bool OE_sort::_right() {
         chrono::duration_cast<chrono::nanoseconds>(mpi_end - mpi_start).count();
 #endif
 
-    _merge_small(even_buffer, size, neighbor_buffer, right_size, odd_buffer,
+    if (even_buffer[size - 1] <= neighbor_buffer[0]) {
+        std::swap(even_buffer, odd_buffer);
+        return true;
+    } else {
+        _merge_small(even_buffer, size, neighbor_buffer, right_size, odd_buffer,
                  size);
-    return false;
+        return false;
+    }
 }
 
 void OE_sort::_merge_small(float *src1, size_t src1_size, float *src2,
                            size_t src2_size, float *dest, size_t dest_size) {
+
+#ifdef PERF
+    auto merge_start = chrono::high_resolution_clock::now();
+#endif
 
     const float *src1_end(src1 + src1_size), *src2_end(src2 + src2_size),
         *dest_end(dest + dest_size);
@@ -240,10 +253,21 @@ void OE_sort::_merge_small(float *src1, size_t src1_size, float *src2,
             std::copy(src2_iter, src2_iter + offset, dest_iter);
         }
     }
+
+#ifdef PERF
+    auto merge_end = chrono::high_resolution_clock::now();
+    merge_time +=
+        chrono::duration_cast<chrono::nanoseconds>(merge_end - merge_start).count();
+#endif
+
 }
 
 void OE_sort::_merge_large(float *src1, size_t src1_size, float *src2,
                            size_t src2_size, float *dest, size_t dest_size) {
+
+#ifdef PERF
+    auto merge_start = chrono::high_resolution_clock::now();
+#endif
 
     const float *src1_end(src1 + src1_size), *src2_end(src2 + src2_size),
         *dest_end(dest + dest_size);
@@ -271,4 +295,11 @@ void OE_sort::_merge_large(float *src1, size_t src1_size, float *src2,
             std::copy(src2_iter, src2_iter + offset, dest_iter);
         }
     }
+
+#ifdef PERF
+    auto merge_end = chrono::high_resolution_clock::now();
+    merge_time +=
+        chrono::duration_cast<chrono::nanoseconds>(merge_end - merge_start).count();
+#endif
+
 }

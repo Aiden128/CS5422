@@ -30,18 +30,10 @@ public:
     double MPI_sync_time;
     double merge_time;
     double stl_sort_time;
-
-    double avg_mem;
-    double avg_read;
-    double avg_write;
-    double avg_trans;
-    double avg_sync;
-    double avg_merge;
-    double avg_stl_sort;
 #endif
 
 private:
-    enum mpi_tags { left, right, null };
+    enum mpi_tags { left, right };
     const int rank;     // My rank ID
     const int task_num; // Total ranks
     float *&main_buffer;
