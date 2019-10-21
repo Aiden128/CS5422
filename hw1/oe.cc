@@ -45,7 +45,6 @@ OE_sort::OE_sort(int rank, int task_num, int file_size, const char *input_file,
     mem_time =
         chrono::duration_cast<chrono::nanoseconds>(mem_end - mem_start).count();
 #endif
-
 }
 
 OE_sort::~OE_sort() {
@@ -71,7 +70,6 @@ void OE_sort::read_file() {
     read_time =
         chrono::duration_cast<chrono::nanoseconds>(r_end - r_start).count();
 #endif
-
 }
 
 void OE_sort::write_file() {
@@ -91,7 +89,6 @@ void OE_sort::write_file() {
     write_time =
         chrono::duration_cast<chrono::nanoseconds>(w_end - w_start).count();
 #endif
-
 }
 
 void OE_sort::sort() {
@@ -131,7 +128,6 @@ void OE_sort::sort() {
                                  sync_end - sync_start)
                                  .count();
 #endif
-
         }
     } else {
         while (not global_sorted) {
@@ -152,7 +148,6 @@ void OE_sort::sort() {
                                  sync_end - sync_start)
                                  .count();
 #endif
-
         }
     }
 }
@@ -184,7 +179,7 @@ bool OE_sort::_left() {
         return true;
     } else {
         _merge_large(odd_buffer, size, neighbor_buffer, left_size, even_buffer,
-                 size);
+                     size);
         return false;
     }
 }
@@ -216,7 +211,7 @@ bool OE_sort::_right() {
         return true;
     } else {
         _merge_small(even_buffer, size, neighbor_buffer, right_size, odd_buffer,
-                 size);
+                     size);
         return false;
     }
 }
@@ -257,9 +252,9 @@ void OE_sort::_merge_small(float *src1, size_t src1_size, float *src2,
 #ifdef PERF
     auto merge_end = chrono::high_resolution_clock::now();
     merge_time +=
-        chrono::duration_cast<chrono::nanoseconds>(merge_end - merge_start).count();
+        chrono::duration_cast<chrono::nanoseconds>(merge_end - merge_start)
+            .count();
 #endif
-
 }
 
 void OE_sort::_merge_large(float *src1, size_t src1_size, float *src2,
@@ -299,7 +294,7 @@ void OE_sort::_merge_large(float *src1, size_t src1_size, float *src2,
 #ifdef PERF
     auto merge_end = chrono::high_resolution_clock::now();
     merge_time +=
-        chrono::duration_cast<chrono::nanoseconds>(merge_end - merge_start).count();
+        chrono::duration_cast<chrono::nanoseconds>(merge_end - merge_start)
+            .count();
 #endif
-
 }
