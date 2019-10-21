@@ -22,7 +22,7 @@ Just one day before deadline, one of the classmates told me that using the ``flo
 
 ### Data exchange
 
-In sequential version of odd-even sort, the abstraction level of **odd** or **even** is single number. However, if we use the same idea in parallel implementation, this approach will led to too many transmission calls with small data payload in flight. 
+In sequential version of odd-even sort, the abstraction level of **odd** or **even** is single number. However, if we use the same idea in parallel implementation, this approach will led to too many transmission calls with small data payload in flight.
 
 In my implementation, to enhance data throughput and reduce the number of transmission calls, the abstrction level is **MPI rank**. In each timestamp, the rank with its rank ID is even will communicate to its neighbor rank (rank ID + 1). Simultaneously, the rank with its rank ID is odd will communicate to its neighbor rank (rank. ID - 1).
 
@@ -65,11 +65,11 @@ In order to know whether the sorting can be terminated or not, I use the ``MPI_A
 
 ## Experiment & Analysis
 
-### 1. Methodology
+### Methodology
 
 #### System Spec
 
-The testing environment is apollo cluster, provided by TA. 
+The testing environment is apollo cluster, provided by TA.
 
 #### Software Spec
 
@@ -97,7 +97,7 @@ The sum of the measured times is almost equal to the overall runtime (less than 
 
 I use the seven indices above to generate the percentage stacked histogram, the I am able to apply *Amdahl's law* to analyze which part of the program could be optimized.
 
-The runtime settings of the cluster are identical to the config files from TA, using different setting is meaningless. 
+The runtime settings of the cluster are identical to the config files from TA, using different settings to run the test is meaningless.
 
 I also noticed that Read/ Write time may be affected by whether the cluster is crownded or not, but I don't really care since there is nothing we can do improve its performance.
 
@@ -107,55 +107,55 @@ I perform profiling with C++ 17 Parallel STL and Boost library ``float_sort``, c
 
 The range of input size is from 1 to 10,000,000. Each sorting method is tested 100 times and take the average runtime as the final runtime.
 
-## Experiment & Analysis
+### Speedup Factor
 
-* Baseline
+#### Baseline
 
-    ![Baseline_hist](README.assets/Baseline Histogram.png)
-    
-    ![Baseline runtime](README.assets/Baseline runtime.png)
-    
-    As the result shows, in testcase 1 to 28,  most of the time is spent on file I/O. Since I already apply parallel file I/O technique, I think there is nothing I can do to make them faster.
-    
-    However, case 29 to 36 shows that sorting takes a lot of time. According to Amdahl's Law, it makes sense to me that I should find some way to make STL sort runs faster.
-    
-* Improve CPU utilization in particular cases
+![Baseline Histogram](../../../Downloads/Baseline Histogram.png)
 
-    I also noticed that in some cases, a rank will handle a very small amount of data, letting the data transmission time much longer than the sorting time (low CPU utilization). Therefore, I set a threshold, if the scheduling result shows that the numbers handling by a rank is smaller than the threshold, it will automatically use rank 0 to handle all the sorting process.
+![Baseline runtime](README.assets/Baseline runtime.png)
 
-    ![Improve CPU utilization Histogram](README.assets/Improve CPU utilization Histogram.png)
+As the result shows, in testcase 1 to 28,  most of the time is spent on file I/O. Since I already apply parallel file I/O technique, I think there is nothing I can do to make them faster.
 
-    ![Improve CPU utilization runtime](README.assets/Improve CPU utilization runtime.png)
+However, case 29 to 36 shows that sorting takes a lot of time. According to Amdahl's Law, it makes sense to me that I should find some way to make STL sort runs faster.
 
-    The result shows that in the small cases, the transmission overhead is reduced. But in the worst cases, the overall runtime is increased. I think this is due to the added branches.
+#### Improve CPU utilization in particular cases
 
-* Using Parallel STL
+I also noticed that in some cases, a rank will handle a very small amount of data, letting the data transmission time much longer than the sorting time (low CPU utilization). Therefore, I set a threshold, if the scheduling result shows that the numbers handling by a rank is smaller than the threshold, it will automatically use rank 0 to handle all the sorting process.
 
-    After searching on the internet, I found that in intel had implemented a **parallel version** of STL, and it had been added to C++ 17 standard. So I use the paralleled version of ``std::sort()`` instead of the sequential version.
+![Improve CPU utilization Histogram](README.assets/Improve CPU utilization Histogram.png)
 
-    ![Parallel STL Histogram](README.assets/Parallel STL Histogram.png)
+![Improve CPU utilization runtime](README.assets/Improve CPU utilization runtime.png)
 
-    ![Parallel STL runtime](README.assets/Parallel STL runtime.png)
+The result shows that in the small cases, the transmission overhead is reduced. But in the worst cases, the overall runtime is increased. I think this is due to the added branches.
 
-    Unfortunately, using paralleled version of ``std::sort()`` doesn't make anything better. The overall runtime is longer, and spend more proportion of time on sorting (from 44% grows to 47% in case 35).
+#### Using Parallel STL
 
-    I think this is caused by the cluster config that makes all the 12 ranks run on the same node, causing all the threads are competing for CPU time with each other.
+After searching on the internet, I found that in intel had implemented a **parallel version** of STL, and it had been added to C++ 17 standard. So I use the paralleled version of ``std::sort()`` instead of the sequential version.
 
-* Sorting library comparison
+![Parallel STL Histogram](README.assets/Parallel STL Histogram.png)
 
-    Somehow I learned that using Boost library can significantly reduced the sorting time, so I tried to compare it with STL in sequential mode and parallel mode.
+![Parallel STL runtime](README.assets/Parallel STL runtime.png)
 
-    ![Sorting Comparison](README.assets/Sorting Comparison (log-log scale).png)
+Unfortunately, using paralleled version of ``std::sort()`` doesn't make anything better. The overall runtime is longer, and spend more proportion of time on sorting (from 44% grows to 47% in case 35).
 
-The plot above shows that the ``float_sort`` function in Boost library has the smallest runtime in average compare to STL. Therefore, I use it in my implementation to achieve best performance.
+I think this is caused by the cluster config that makes all the 12 ranks run on the same node, causing all the threads are competing for CPU time with each other. (Although you can use ``tbb::task_scheduler_init`` to decide how many threads to be created, the results aren't satisfied either.)
 
-*   Using Boost Library
+#### Sorting library comparison
 
-    ![Boost Library Histogram](README.assets/Boost Library Histogram.png)
+Somehow I learned that using Boost library can significantly reduced the sorting time, so I tried to compare it with STL in sequential mode and parallel mode.
 
-    ![Boost Library runtime](README.assets/Boost Library runtime.png)
+![Sorting Comparison](README.assets/Sorting Comparison (log-log scale).png)
 
-    It's obvious that the sorting time is significantly reduced among other parts, and the runtime is significantly reduced as well!
+The plot above suggests that the ``float_sort`` function in Boost library has the smallest runtime in average compare to STL. Therefore, I use it in my implementation to achieve best performance.
+
+#### Using Boost Library
+
+![Boost Library Histogram](README.assets/Boost Library Histogram.png)
+
+![Boost Library runtime](README.assets/Boost Library runtime.png)
+
+It's obvious that the sorting time is significantly reduced among other parts, and the runtime is significantly reduced as well!
 
 ## Conclusion
 
@@ -169,11 +169,12 @@ BTW, I think writing Makefile is too complicated, a CMakeLists.txt can make thin
 
 ## Reference
 
-[1]: http://www.training.prace-ri.eu/uploads/tx_pracetmo/pio1.pdf	"MPI Parallel I/O"
-[2]: http://selkie-macalester.org/csinparallel/modules/MPIProgramming/build/html/oddEvenSort/oddEven.html	"Odd-Even Sort MPI"
-[3]: https://www.geeksforgeeks.org/merge-sort/	"Merge Sort"
-[4]: https://software.intel.com/en-us/articles/get-started-with-parallel-stl	"intel Parallel STL"
-[5]: https://www.boost.org/doc/libs/1_67_0/libs/sort/doc/html/sort/single_thread/spreadsort/sort_hpp/float_sort.html	"Boost Float Sort"
+[1]MPI Parallel I/O, <http://www.training.prace-ri.eu/uploads/tx_pracetmo/pio1.pdf>
 
+[2]MPI Odd-Even Sort, <http://selkie-macalester.org/csinparallel/modules/MPIProgramming/build/html/oddEvenSort/oddEven.html>
 
+[3]Merge Sort, <https://www.geeksforgeeks.org/merge-sort/>
 
+[4]intel Parallel STL, <https://software.intel.com/en-us/articles/get-started-with-parallel-stl>
+
+[5]Boost Float Sort,  <https://www.boost.org/doc/libs/1_67_0/libs/sort/doc/html/sort/single_thread/spreadsort/sort_hpp/float_sort.html>
