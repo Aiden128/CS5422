@@ -6,7 +6,7 @@
 
 using namespace std;
 
-static inline int mandel(double &c_re, double &c_im, int &count);
+static inline int mandel(const double &c_re, const double &c_im, const int &count);
 void write_png(const char* filename, int iters, int width, int height, const int* buffer);
 
 int main (int argc, char **argv) {
@@ -67,27 +67,27 @@ int main (int argc, char **argv) {
     for (int i = 0; i < width * height; ++i) {
         if(image[i] != image1[i]) {
             ++diff_count;
+            cout << "ref[" << i << "]: " << image[i] << " | ";
+            cout << "image[" << i << "]: " << image1[i] << endl; 
         }
     }
     rate = static_cast<double>(diff_count / (width * height));
     cout << "Err rate: " << diff_count << endl;
 
-    write_png(filename, iters, width, height, image);
+    write_png(filename, iters, width, height, image1);
     delete[](image);
     delete[] (image1);
     return 0;
 }
 
-static inline int mandel(double &c_re, double &c_im, int &count) {
-    double z_re = 0.0, z_im = 0.0;
-    int i;
-    for (i = 0; i < count; ++i) {
+static inline int mandel(const double &c_re, const double &c_im, const int &count) {
+    double z_re(0.0), z_im(0.0);
+    double new_re(0.0), new_im(0.0);
+    int i(0);
 
-        if (z_re * z_re + z_im * z_im > 4.0) {
-            break;
-        }
-        double new_re = z_re * z_re - z_im * z_im;
-        double new_im = 2.0 * z_re * z_im;
+    for (i = 0; i < count && (z_re * z_re + z_im * z_im < 4.0); ++i) {
+        new_re = z_re * z_re - z_im * z_im;
+        new_im = 2.0 * z_re * z_im;
         z_re = c_re + new_re;
         z_im = c_im + new_im;
     }
