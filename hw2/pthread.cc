@@ -15,6 +15,8 @@
 
 using namespace std;
 
+pthread_barrier_t barrier;
+
 void *Op(void *threadD);
 void write_png(const char *filename, int iters, int width, int height,
                const int *buffer);
@@ -39,7 +41,8 @@ int main(int argc, char **argv) {
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
 
-    const int num_thread(CPU_COUNT(&cpu_set));
+    //const int num_thread(CPU_COUNT(&cpu_set));
+    const int num_thread(2);
     const char *filename(argv[1]);
     const long iters(strtol(argv[2], 0, 10));
     const double left(strtod(argv[3], 0));
@@ -53,6 +56,7 @@ int main(int argc, char **argv) {
     pthread_t *threads(new pthread_t[num_thread]);
     thread_data *threadD(new thread_data[num_thread]);
 
+    pthread_barrier_init(&barrier,NULL,num_thread);
     for (int i = 0; i < num_thread; ++i) {
         threadD[i].threadID = i;
         threadD[i].num_thread = num_thread;
@@ -65,13 +69,14 @@ int main(int argc, char **argv) {
         threadD[i].height = height;
         threadD[i].iter = iters;
         // Create threads
-        pthread_create(&threads[i], NULL, Op, (void *)&threadD[i]);
+        pthread_create(&threads[i], NULL, Op, reinterpret_cast<void *>(&threadD[i]));
     }
     for (int i = 0; i < num_thread; ++i) {
         pthread_join(threads[i], NULL);
     }
     write_png(filename, iters, width, height, image);
 
+    pthread_barrier_destroy(&barrier);
     delete[] image;
     delete[] threads;
     delete[] threadD;
@@ -82,14 +87,8 @@ void *Op(void *threadD) {
     thread_data *args = reinterpret_cast<thread_data *>(threadD);
     int totalRows = args->height / args->num_thread;
     int res = args->height % args->num_thread;
-    int startRow = totalRows * args->threadID;
-    if(args->threadID == 0) {
-        startRow = 0;
-        totalRows += res;
-    }
-    else {
-        startRow += res;
-    }
+    totalRows += (args->threadID < res);
+    int startRow = totalRows * args->threadID + std::min(args->threadID, res);
     int endRow = startRow + totalRows;
 
     for (int j = startRow; j < endRow; ++j) {
