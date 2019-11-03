@@ -1,11 +1,11 @@
-CC = gcc
-CXX = g++
+CC = clang
+CXX = clang++
 LDLIBS = -lpng
-CFLAGS = -lm -O3
-hw2a: CFLAGS += -pthread
+CXXFLAGS = -lm -O3
+hw2a: CXXFLAGS += -pthread -O3 -march=native
 hw2b: CC = mpicc
 hw2b: CXX = mpicxx
-hw2b: CFLAGS += -fopenmp
+hw2b: CXXFLAGS += -fopenmp
 CXXFLAGS = $(CFLAGS)
 TARGETS = hw2seq hw2a hw2b
 
