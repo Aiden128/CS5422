@@ -13,8 +13,6 @@
 #include <sched.h>
 #include <vector>
 
-//using namespace std;
-
 #ifdef DEBUG
 pthread_barrier_t barrier;
 pthread_mutex_t mutex(PTHREAD_MUTEX_INITIALIZER);
@@ -28,20 +26,7 @@ double lower, upper;
 int width, height;
 int iters;
 int num_thread;
-// static inline int mandel(const double &c_re, const double &c_im, const int &count) {
-//     double z_re(0.0), z_im(0.0);
-//     double new_re(0.0), new_im(0.0);
-//     int i(0);
 
-//     for (i = 0; i < count && (z_re * z_re + z_im * z_im < 4.0); ++i) {
-//         new_re = z_re * z_re - z_im * z_im;
-//         new_im = 2.0 * z_re * z_im;
-//         z_re = c_re + new_re;
-//         z_im = c_im + new_im;
-//     }
-
-//     return i;q
-// }
 struct thread_data {
     int threadID;
     int *image;
@@ -81,7 +66,7 @@ int main(int argc, char **argv) {
         pthread_create(&threads[i], NULL, Op, reinterpret_cast<void *>(&threadD[i]));
     }
     pthread_join(threads[0], NULL);
-    for (int i = 1; i < num_thread; ++i) {
+    for (int i = 0; i < num_thread; ++i) {
         pthread_join(threads[i], NULL);
     }
 #ifdef DEBUG
@@ -130,16 +115,6 @@ void *Op(void *threadD) {
         }
     }
 
-    // double dx = (args->right - args->left) / args->width;
-    // double dy = (args->upper - args->lower) / args->height;
-    // for (int j = startRow; j < endRow; ++j) {
-    //     for (int i = 0; i < args->width; ++i) {
-    //         double x(args->left + i * dx);
-    //         double y(args->lower + j * dy);
-    //         int idx(j * args->width + i);
-    //         args->image[idx] = mandel(x, y, args->iter);
-    //     }
-    // }
 #ifdef DEBUG
     pthread_barrier_wait(&barrier);
 #endif
@@ -149,12 +124,9 @@ void *Op(void *threadD) {
 void write_png(const char *filename, int iters, int width, int height,
                const int *buffer) {
     FILE *fp = fopen(filename, "wb");
-    //assert(fp);
     png_structp png_ptr =
         png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    //assert(png_ptr);
     png_infop info_ptr = png_create_info_struct(png_ptr);
-    //assert(info_ptr);
     png_init_io(png_ptr, fp);
     png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB,
                  PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
