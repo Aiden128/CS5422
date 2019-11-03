@@ -4,6 +4,7 @@
 #define PNG_NO_SETJMP
 #define DEBUG
 #ifdef DEBUG
+#include "seq_check.h"
 #include <cassert>
 #endif
 #include <iostream>
@@ -16,11 +17,25 @@
 using namespace std;
 
 pthread_barrier_t barrier;
+pthread_mutex_t mutex(PTHREAD_MUTEX_INITIALIZER);
 
 void *Op(void *threadD);
 void write_png(const char *filename, int iters, int width, int height,
                const int *buffer);
+// static inline int mandel(const double &c_re, const double &c_im, const int &count) {
+//     double z_re(0.0), z_im(0.0);
+//     double new_re(0.0), new_im(0.0);
+//     int i(0);
 
+//     for (i = 0; i < count && (z_re * z_re + z_im * z_im < 4.0); ++i) {
+//         new_re = z_re * z_re - z_im * z_im;
+//         new_im = 2.0 * z_re * z_im;
+//         z_re = c_re + new_re;
+//         z_im = c_im + new_im;
+//     }
+
+//     return i;
+// }
 struct thread_data {
     int threadID;
     int num_thread;
@@ -74,6 +89,9 @@ int main(int argc, char **argv) {
     for (int i = 0; i < num_thread; ++i) {
         pthread_join(threads[i], NULL);
     }
+#ifdef DEBUG
+    seq_check(true,iters, left, right, lower, upper, width, height, image);
+#endif
     write_png(filename, iters, width, height, image);
 
     pthread_barrier_destroy(&barrier);
@@ -90,6 +108,13 @@ void *Op(void *threadD) {
     totalRows += (args->threadID < res);
     int startRow = totalRows * args->threadID + std::min(args->threadID, res);
     int endRow = startRow + totalRows;
+
+#ifdef DEBUG
+    pthread_mutex_lock(&mutex);
+    cout << "Thread ID: " << args->threadID << endl;
+    cout << "Start, end, total: " << startRow << ", " << endRow << ", " << totalRows << endl;
+    pthread_mutex_unlock(&mutex);
+#endif
 
     for (int j = startRow; j < endRow; ++j) {
         double y0 = j * ((args->upper - args->lower) / args->height) + args->lower;
@@ -109,6 +134,18 @@ void *Op(void *threadD) {
             args->image[j * args->width + i] = repeats;
         }
     }
+
+    // double dx = (args->right - args->left) / args->width;
+    // double dy = (args->upper - args->lower) / args->height;
+    // for (int j = startRow; j < endRow; ++j) {
+    //     for (int i = 0; i < args->width; ++i) {
+    //         double x(args->left + i * dx);
+    //         double y(args->lower + j * dy);
+    //         int idx(j * args->width + i);
+    //         args->image[idx] = mandel(x, y, args->iter);
+    //     }
+    // }
+    pthread_barrier_wait(&barrier);
     pthread_exit(NULL);
 }
 
