@@ -28,7 +28,7 @@ int num_thread;
 int *image(nullptr);
 int scheduled_idx(0);
 
-const int tile_size = 200;
+const int tile_size = 100;
 pthread_mutex_t mutex;
 
 int main(int argc, char **argv) {
@@ -55,11 +55,13 @@ int main(int argc, char **argv) {
     dx = static_cast<double> ((right - left) / width);
     dy = static_cast<double> ((upper - lower) / height);
 
+    for (int i = 0; i < num_thread; ++i) {
+        pthread_create(&producer_threads[i], NULL, producer, NULL);
+    }
 #ifdef PERF
     auto comp_start = std::chrono::high_resolution_clock::now();
 #endif
-    for (int i = 0; i < num_thread; i++) {
-        pthread_create(&producer_threads[i], NULL, producer, NULL);
+    for (int i = 0; i < num_thread; ++i) {
         pthread_join(producer_threads[i], NULL);
     }
 #ifdef PERF
