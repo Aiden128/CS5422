@@ -65,7 +65,7 @@ static int create_tasks(int image_width, int image_height) {
 
     int tasks_created = 0;
 
-    const int tile_size(100);
+    const int tile_size(200);
     int task_count = (width * height) / tile_size;
     int res = (width * height) % tile_size;
 
@@ -114,22 +114,81 @@ static void *producer(void *data) {
         task_queue.pop();
         pthread_mutex_unlock(mutex);
 
-        for (int j = job_data.y0; j <= job_data.y1; ++j) {
-            double y0 = j * ((upper - lower) / height) + lower;
-            for (int i = job_data.x0; i <= job_data.x1; ++i) {
-                double x0 = i * ((right - left) / width) + left;
-                int repeats = 0;
-                double x = 0;
-                double y = 0;
-                double length_squared = 0;
-                while (repeats < iters && length_squared < 4.0) {
-                    double temp = x * x - y * y + x0;
-                    y = 2 * x * y + y0;
-                    x = temp;
-                    length_squared = x * x + y * y;
-                    ++repeats;
+        if(job_data.x0 == job_data.x1) {
+            for (int j = job_data.y0; j <= job_data.y1; ++j) {
+                double y0 = j * ((upper - lower) / height) + lower;
+                for (int i = job_data.x0; i <= job_data.x1; ++i) {
+                    double x0 = i * ((right - left) / width) + left;
+                    int repeats = 0;
+                    double x = 0;
+                    double y = 0;
+                    double length_squared = 0;
+                    while (repeats < iters && length_squared < 4.0) {
+                        double temp = x * x - y * y + x0;
+                        y = 2 * x * y + y0;
+                        x = temp;
+                        length_squared = x * x + y * y;
+                        ++repeats;
+                    }
+                    image[j * width + i] = repeats;
                 }
-                image[j * width + i] = repeats;
+            }
+        } else {
+            for (int j = job_data.y0; j < height; ++j) {
+                double y0 = j * ((upper - lower) / height) + lower;
+                for(int i = job_data.x0; i <= job_data.x0; ++i) {
+                    double x0 = i * ((right - left) / width) + left;
+                    int repeats = 0;
+                    double x = 0;
+                    double y = 0;
+                    double length_squared = 0;
+                    while (repeats < iters && length_squared < 4.0) {
+                        double temp = x * x - y * y + x0;
+                        y = 2 * x * y + y0;
+                        x = temp;
+                        length_squared = x * x + y * y;
+                        ++repeats;
+                    }
+                    image[j * width + i] = repeats;
+                }
+            }
+            for (int count = 0; count < (job_data.x1 - job_data.x0 - 1); ++count) {
+                for (int j = 0; j <= height; ++j) {
+                    double y0 = j * ((upper - lower) / height) + lower;
+                    for (int i = job_data.x0 + 1; i < job_data.x1; ++i) {
+                        double x0 = i * ((right - left) / width) + left;
+                        int repeats = 0;
+                        double x = 0;
+                        double y = 0;
+                        double length_squared = 0;
+                        while (repeats < iters && length_squared < 4.0) {
+                            double temp = x * x - y * y + x0;
+                            y = 2 * x * y + y0;
+                            x = temp;
+                            length_squared = x * x + y * y;
+                            ++repeats;
+                        }
+                        image[j * width + i] = repeats;
+                    }
+                }
+            }
+            for (int j = 0; j <= job_data.y1; ++j) {
+                double y0 = j * ((upper - lower) / height) + lower;
+                for(int i = job_data.x1; i <= job_data.x1; ++i) {
+                    double x0 = i * ((right - left) / width) + left;
+                    int repeats = 0;
+                    double x = 0;
+                    double y = 0;
+                    double length_squared = 0;
+                    while (repeats < iters && length_squared < 4.0) {
+                        double temp = x * x - y * y + x0;
+                        y = 2 * x * y + y0;
+                        x = temp;
+                        length_squared = x * x + y * y;
+                        ++repeats;
+                    }
+                    image[j * width + i] = repeats;
+                }
             }
         }
     }
