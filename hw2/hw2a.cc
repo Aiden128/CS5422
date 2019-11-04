@@ -12,7 +12,7 @@
 #include <sched.h>
 #include <cassert>
 
-static int create_tasks(int image_width, int image_height);
+static void create_tasks(int image_width, int image_height);
 static void *producer(void *data);
 void process_mandelbrot_set();
 void write_png(const char *filename, int iters, int width, int height,
@@ -61,10 +61,7 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-static int create_tasks(int image_width, int image_height) {
-
-    int tasks_created = 0;
-
+static void create_tasks(int image_width, int image_height) {
     const int tile_size(200);
     int task_count = (width * height) / tile_size;
     int res = (width * height) % tile_size;
@@ -84,7 +81,6 @@ static int create_tasks(int image_width, int image_height) {
         task.y0 = yi;
         task.y1 = yf;
         task_queue.push(task);
-        tasks_created++;
     }
     if (res) {
         int xi = ((scheduled_idx) / image_height);
@@ -97,9 +93,7 @@ static int create_tasks(int image_width, int image_height) {
         task.y0 = yi;
         task.y1 = yf;
         task_queue.push(task);
-        tasks_created++;
     }
-    return tasks_created;
 }
 
 static void *producer(void *data) {
@@ -196,18 +190,18 @@ static void *producer(void *data) {
 }
 
 void process_mandelbrot_set() {
-    int tasks_created = create_tasks(width, height);
+    create_tasks(width, height);
     pthread_t producer_threads[num_thread];
 
     // Debug
-    std::cout << "Print schedule" << std::endl;
-    int size = task_queue.size();
-    for(int i = 0; i < size; ++i) {
-        schedule_data backup = task_queue.front();
-        std::cout<< task_queue.front().x0<< ", " << task_queue.front().y0 << ", " << task_queue.front().x1<< ", " << task_queue.front().y1<< ", \n"; 
-        task_queue.pop();
-        task_queue.push(backup);
-    }
+    // std::cout << "Print schedule" << std::endl;
+    // int size = task_queue.size();
+    // for(int i = 0; i < size; ++i) {
+    //     schedule_data backup = task_queue.front();
+    //     std::cout<< task_queue.front().x0<< ", " << task_queue.front().y0 << ", " << task_queue.front().x1<< ", " << task_queue.front().y1<< ", \n"; 
+    //     task_queue.pop();
+    //     task_queue.push(backup);
+    // }
     //exit(0);
 
     for (int i = 0; i < num_thread; i++) {
