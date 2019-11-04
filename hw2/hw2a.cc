@@ -1,6 +1,9 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#ifdef PERF
+//#include "perf.hpp"
+#endif
 #include <chrono>
 #include <complex>
 #include <iostream>
@@ -52,10 +55,18 @@ int main(int argc, char **argv) {
     dx = static_cast<double> ((right - left) / width);
     dy = static_cast<double> ((upper - lower) / height);
 
+#ifdef PERF
+    auto comp_start = std::chrono::high_resolution_clock::now();
+#endif
     for (int i = 0; i < num_thread; i++) {
         pthread_create(&producer_threads[i], NULL, producer, NULL);
         pthread_join(producer_threads[i], NULL);
     }
+#ifdef PERF
+    auto comp_end = std::chrono::high_resolution_clock::now();
+    auto comp_time = std::chrono::duration_cast<std::chrono::nanoseconds>(comp_end - comp_start).count();
+    std::cout << "Computation time: " << comp_time << " ns" << std::endl;
+#endif
     write_png(filename, iters, width, height, image);
 
     delete[](image);
