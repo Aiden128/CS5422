@@ -72,12 +72,12 @@ static int create_tasks(int image_width, int image_height) {
     int sche_x(0), sche_y(0);
     int scheduled_idx(0);
     for(int i = 0; i < task_count; ++i) {
-        int xi = ((scheduled_idx) / image_width);
-        int yi = (scheduled_idx) % image_width;
+        int xi = ((scheduled_idx) / image_height);
+        int yi = (scheduled_idx) % image_height;
         scheduled_idx += tile_size;
         assert(scheduled_idx <= (width * height));
-        int xf = ((scheduled_idx - 1) / image_width);
-        int yf = (scheduled_idx - 1) % image_width;
+        int xf = ((scheduled_idx - 1) / image_height);
+        int yf = (scheduled_idx - 1) % image_height;
         schedule_data task;
         task.x0 = xi;
         task.x1 = xf;
@@ -87,8 +87,8 @@ static int create_tasks(int image_width, int image_height) {
         tasks_created++;
     }
     if (res) {
-        int xi = ((scheduled_idx) / image_width);
-        int yi = (scheduled_idx) % image_width;
+        int xi = ((scheduled_idx) / image_height);
+        int yi = (scheduled_idx) % image_height;
         int xf = width - 1;
         int yf = height - 1;
         schedule_data task;
