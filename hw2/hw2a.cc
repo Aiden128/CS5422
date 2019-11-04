@@ -9,28 +9,24 @@
 #include <pthread.h>
 #include <sched.h>
 #include <cassert>
+#include <boost/range/irange.hpp>
 
 static void *producer(void *data);
-void process_mandelbrot_set();
 void write_png(const char *filename, int iters, int width, int height,
                const int *buffer);
 
-struct schedule_data {
-    int x0, y0, x1, y1;
-    schedule_data(int x0, int y0, int x1, int y1) : 
-    x0(x0), y0(y0), x1(x1), y1(y1) {}
-};
-
 double left, right;
 double lower, upper;
+double dx, dy;
 int width, height;
+int image_size;
 int iters;
 int num_thread;
 int *image(nullptr);
 int scheduled_idx(0);
 
 const int tile_size = 200;
-pthread_mutex_t *mutex;
+pthread_mutex_t mutex;
 
 int main(int argc, char **argv) {
     // allow complex literal
@@ -49,131 +45,65 @@ int main(int argc, char **argv) {
     width = strtol(argv[7], 0, 10);
     height = strtol(argv[8], 0, 10);
     image = new int[width * height];
-    mutex = new (pthread_mutex_t);
-    pthread_mutex_init(mutex, NULL);
-
-    process_mandelbrot_set();
-    write_png(filename, iters, width, height, image);
-
-    delete[](image);
-    delete[](mutex);
-
-    return 0;
-}
-
-static void *producer(void *data) {
-    while (1) {
-        pthread_mutex_lock(mutex);
-        if (scheduled_idx >= (width * height)) {
-            pthread_mutex_unlock(mutex);
-            break;
-        }
-        int start = scheduled_idx;
-        scheduled_idx += tile_size;
-        std::cout << "Thread schedule_idx: " << start <<std::endl;
-        std::cout << "Updated idx: " << scheduled_idx << std::endl;
-        pthread_mutex_unlock(mutex);
-
-        schedule_data job_data(0, 0, 0, 0);
-        job_data.x0 = ((start) / height);
-        job_data.y0 = (start) % height;
-        start += tile_size;
-        job_data.x1 = ((start-1) / height);
-        job_data.y1 = (start-1) % height;
-        if(start >= width * height) {
-            job_data.x1 = width - 1;
-            job_data.y1 = height - 1;
-        }
-        std::cout << "Schedule x0,y0,x1,y1: "<< job_data.x0 << ", "<< job_data.y0 << ", "<< job_data.x1 << ", "<< job_data.y1 << std::endl;
-
-        if(job_data.x0 == job_data.x1) {
-            for (int j = job_data.y0; j <= job_data.y1; ++j) {
-                double y0 = j * ((upper - lower) / height) + lower;
-                for (int i = job_data.x0; i <= job_data.x1; ++i) {
-                    double x0 = i * ((right - left) / width) + left;
-                    int repeats = 0;
-                    double x = 0;
-                    double y = 0;
-                    double length_squared = 0;
-                    while (repeats < iters && length_squared < 4.0) {
-                        double temp = x * x - y * y + x0;
-                        y = 2 * x * y + y0;
-                        x = temp;
-                        length_squared = x * x + y * y;
-                        ++repeats;
-                    }
-                    image[j * width + i] = repeats;
-                }
-            }
-        } else {
-            for (int j = job_data.y0; j < height; ++j) {
-                double y0 = j * ((upper - lower) / height) + lower;
-                for(int i = job_data.x0; i <= job_data.x0; ++i) {
-                    double x0 = i * ((right - left) / width) + left;
-                    int repeats = 0;
-                    double x = 0;
-                    double y = 0;
-                    double length_squared = 0;
-                    while (repeats < iters && length_squared < 4.0) {
-                        double temp = x * x - y * y + x0;
-                        y = 2 * x * y + y0;
-                        x = temp;
-                        length_squared = x * x + y * y;
-                        ++repeats;
-                    }
-                    image[j * width + i] = repeats;
-                }
-            }
-            for (int count = 0; count < (job_data.x1 - job_data.x0 - 1); ++count) {
-                for (int j = 0; j <= height; ++j) {
-                    double y0 = j * ((upper - lower) / height) + lower;
-                    for (int i = job_data.x0 + 1; i < job_data.x1; ++i) {
-                        double x0 = i * ((right - left) / width) + left;
-                        int repeats = 0;
-                        double x = 0;
-                        double y = 0;
-                        double length_squared = 0;
-                        while (repeats < iters && length_squared < 4.0) {
-                            double temp = x * x - y * y + x0;
-                            y = 2 * x * y + y0;
-                            x = temp;
-                            length_squared = x * x + y * y;
-                            ++repeats;
-                        }
-                        image[j * width + i] = repeats;
-                    }
-                }
-            }
-            for (int j = 0; j <= job_data.y1; ++j) {
-                double y0 = j * ((upper - lower) / height) + lower;
-                for(int i = job_data.x1; i <= job_data.x1; ++i) {
-                    double x0 = i * ((right - left) / width) + left;
-                    int repeats = 0;
-                    double x = 0;
-                    double y = 0;
-                    double length_squared = 0;
-                    while (repeats < iters && length_squared < 4.0) {
-                        double temp = x * x - y * y + x0;
-                        y = 2 * x * y + y0;
-                        x = temp;
-                        length_squared = x * x + y * y;
-                        ++repeats;
-                    }
-                    image[j * width + i] = repeats;
-                }
-            }
-        }
-    }
-    pthread_exit(NULL);
-}
-
-void process_mandelbrot_set() {
+    pthread_mutex_init(&mutex, NULL);
     pthread_t producer_threads[num_thread];
+
+    image_size = width * height;
+    dx = static_cast<double> ((right - left) / width);
+    dy = static_cast<double> ((upper - lower) / height);
 
     for (int i = 0; i < num_thread; i++) {
         pthread_create(&producer_threads[i], NULL, producer, NULL);
         pthread_join(producer_threads[i], NULL);
     }
+    write_png(filename, iters, width, height, image);
+
+    delete[](image);
+
+    return 0;
+}
+
+static void *producer(void *data) {
+    int start_idx(0), end_idx(0);
+    bool end_flag(false);
+    while (1) {
+        pthread_mutex_lock(&mutex);
+        if (scheduled_idx == (image_size)) {
+            pthread_mutex_unlock(&mutex);
+            break;
+        }
+        start_idx = scheduled_idx;
+        if(start_idx + tile_size < image_size) {
+            scheduled_idx += tile_size;
+        } else {
+            scheduled_idx = image_size;
+            end_flag = true;
+        }
+        pthread_mutex_unlock(&mutex);
+        if(end_flag) {
+            end_idx = image_size;
+        } else {
+            end_idx = start_idx + tile_size;
+        }
+        for(auto pixel : boost::irange(start_idx, end_idx)) {
+            int j(pixel / width), i(pixel % width);
+            double y0(j * dy + lower), x0(i * dx + left);
+            int repeats(0);
+            double x(0.0), y(0.0), length_squared(0.0);
+            while (repeats < iters && length_squared < 4) {
+                double temp = x * x - y * y + x0;
+                y = 2 * x * y + y0;
+                x = temp;
+                length_squared = x * x + y * y;
+                ++repeats;
+            }
+            image[pixel] = repeats;
+        }
+        if(end_flag) {
+            break;
+        }
+    }
+    pthread_exit(NULL);
 }
 
 void write_png(const char *filename, int iters, int width, int height,
