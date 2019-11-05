@@ -28,12 +28,14 @@ int num_thread;
 int *image(nullptr);
 int scheduled_idx(0);
 
-const int tile_size = 100;
+const int tile_size(50);
 pthread_mutex_t mutex;
 
 int main(int argc, char **argv) {
-    // allow complex literal
-    using namespace std::literals;
+#ifdef PERF
+    auto glob_start = std::chrono::high_resolution_clock::now();
+#endif
+
     // Get number of CPUs available
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
@@ -47,11 +49,10 @@ int main(int argc, char **argv) {
     upper = strtod(argv[6], 0);
     width = strtol(argv[7], 0, 10);
     height = strtol(argv[8], 0, 10);
-    image = new int[width * height];
+    image_size = width * height;
+    image = new int[image_size];
     pthread_mutex_init(&mutex, NULL);
     pthread_t producer_threads[num_thread];
-
-    image_size = width * height;
     dx = static_cast<double> ((right - left) / width);
     dy = static_cast<double> ((upper - lower) / height);
 
@@ -69,9 +70,22 @@ int main(int argc, char **argv) {
     auto comp_time = std::chrono::duration_cast<std::chrono::nanoseconds>(comp_end - comp_start).count();
     std::cout << "Computation time: " << comp_time << " ns" << std::endl;
 #endif
+#ifdef PERF
+    auto png_start = std::chrono::high_resolution_clock::now();
+#endif
     write_png(filename, iters, width, height, image);
+#ifdef PERF
+    auto png_end = std::chrono::high_resolution_clock::now();
+    auto png_time = std::chrono::duration_cast<std::chrono::nanoseconds>(png_end - png_start).count();
+    std::cout << "Write image time: " << png_time << " ns" << std::endl;
+#endif
 
     delete[](image);
+#ifdef PERF
+    auto glob_end = std::chrono::high_resolution_clock::now();
+    auto glob_time = std::chrono::duration_cast<std::chrono::nanoseconds>(glob_end - glob_start).count();
+    std::cout << "Total time: " << glob_time << " ns" << std::endl;
+#endif
 
     return 0;
 }
@@ -81,38 +95,56 @@ static void *producer(void *data) {
     bool end_flag(false);
     while (1) {
         pthread_mutex_lock(&mutex);
-        if (scheduled_idx == (image_size)) {
+        // if (scheduled_idx == (image_size)) {
+        //     pthread_mutex_unlock(&mutex);
+        //     break;
+        // }
+        if (__builtin_expect(scheduled_idx == (image_size), false)) {
             pthread_mutex_unlock(&mutex);
             break;
         }
         start_idx = scheduled_idx;
-        if(start_idx + tile_size < image_size) {
+        // if(start_idx + tile_size < image_size) {
+        //     scheduled_idx += tile_size;
+        // } else {
+        //     scheduled_idx = image_size;
+        //     end_flag = true;
+        // }
+        if(__builtin_expect((start_idx + tile_size < image_size), true)) {
             scheduled_idx += tile_size;
         } else {
             scheduled_idx = image_size;
             end_flag = true;
         }
         pthread_mutex_unlock(&mutex);
-        if(end_flag) {
+        // if(end_flag) {
+        //     end_idx = image_size;
+        // } else {
+        //     end_idx = start_idx + tile_size;
+        // }
+        if(__builtin_expect(end_flag, false)){
             end_idx = image_size;
         } else {
             end_idx = start_idx + tile_size;
         }
-        for(auto pixel : boost::irange(start_idx, end_idx)) {
-            int j(pixel / width), i(pixel % width);
-            double y0(j * dy + lower), x0(i * dx + left);
+        #pragma loop count (50)
+        for(auto pixel_idx : boost::irange(start_idx, end_idx)) {
+            double y0((pixel_idx / width) * dy + lower), x0((pixel_idx % width) * dx + left);
             int repeats(0);
             double x(0.0), y(0.0), length_squared(0.0);
             while (repeats < iters && length_squared < 4) {
-                double temp = x * x - y * y + x0;
+                double temp(x * x - y * y + x0);
                 y = 2 * x * y + y0;
                 x = temp;
                 length_squared = x * x + y * y;
                 ++repeats;
             }
-            image[pixel] = repeats;
+            image[pixel_idx] = repeats;
         }
-        if(end_flag) {
+        // if(end_flag) {
+        //     break;
+        // }
+        if(__builtin_expect((end_flag), false)) {
             break;
         }
     }
@@ -137,8 +169,10 @@ void write_png(const char *filename, int iters, int width, int height,
     png_set_compression_level(png_ptr, 1);
     size_t row_size = 3 * width * sizeof(png_byte);
     png_bytep row = (png_bytep)malloc(row_size);
+    #pragma clang loop unroll(enable)
     for (int y = 0; y < height; ++y) {
         std::fill(row, row+row_size, 0);
+        #pragma clang loop vectorize(enable)
         for (int x = 0; x < width; ++x) {
             int p = buffer[(height - 1 - y) * width + x];
             png_bytep color = row + x * 3;
