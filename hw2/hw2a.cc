@@ -52,18 +52,22 @@ int main(int argc, char **argv) {
     image_size = width * height;
     image = new int[image_size];
     pthread_mutex_init(&mutex, NULL);
-    pthread_t producer_threads[num_thread];
+    pthread_t threads[num_thread];
+    cpu_set_t thread_cpu[num_thread];
     dx = static_cast<double> ((right - left) / width);
     dy = static_cast<double> ((upper - lower) / height);
 
     for (int i = 0; i < num_thread; ++i) {
-        pthread_create(&producer_threads[i], NULL, producer, NULL);
+        pthread_create(&threads[i], NULL, producer, NULL);
+        CPU_ZERO(&thread_cpu[i]);
+        CPU_SET(i, &thread_cpu[i]);
+        pthread_setaffinity_np(threads[i], sizeof(cpu_set_t), &thread_cpu[i]);
     }
 #ifdef PERF
     auto comp_start = std::chrono::high_resolution_clock::now();
 #endif
     for (int i = 0; i < num_thread; ++i) {
-        pthread_join(producer_threads[i], NULL);
+        pthread_join(threads[i], NULL);
     }
 #ifdef PERF
     auto comp_end = std::chrono::high_resolution_clock::now();
@@ -127,7 +131,6 @@ static void *producer(void *data) {
         } else {
             end_idx = start_idx + tile_size;
         }
-        #pragma loop count (50)
         for(auto pixel_idx : boost::irange(start_idx, end_idx)) {
             double y0((pixel_idx / width) * dy + lower), x0((pixel_idx % width) * dx + left);
             int repeats(0);
