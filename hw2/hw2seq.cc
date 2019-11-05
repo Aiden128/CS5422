@@ -3,11 +3,24 @@
 #include <chrono>
 #include <cassert>
 #include <cstring>
-
+#include <complex>
 using namespace std;
 
 static inline int mandel(const double &c_re, const double &c_im, const int &count);
+inline int mandel(const complex<double> &c, const int &count);
 void write_png(const char* filename, int iters, int width, int height, const int* buffer);
+
+template <typename T, typename U>
+inline std::complex<T> operator*(const std::complex<T>& lhs, const U& rhs)
+{
+    return lhs * T(rhs);
+}
+
+template <typename T, typename U>
+inline std::complex<T> operator*(const U& lhs, const std::complex<T>& rhs)
+{
+    return T(lhs) * rhs;
+}
 
 int main (int argc, char **argv) {
 
@@ -28,12 +41,19 @@ int main (int argc, char **argv) {
     double dx = (right - left) / width;
     double dy = (upper - lower) / height;
 
+    // for (int j = 0; j < height; ++j) {
+    //     for (int i = 0; i < width; ++i) {
+    //         double x(left + i * dx);
+    //         double y(lower + j * dy);
+    //         int idx(j * width + i);
+    //         image1[idx] = mandel(x, y, iters);
+    //     }
+    // }
     for (int j = 0; j < height; ++j) {
         for (int i = 0; i < width; ++i) {
-            double x(left + i * dx);
-            double y(lower + j * dy);
+            complex<double> c(left+i*dx, lower+j*dy);
             int idx(j * width + i);
-            image1[idx] = mandel(x, y, iters);
+            image1[idx] = mandel(c, iters);
         }
     }
 
@@ -92,6 +112,16 @@ static inline int mandel(const double &c_re, const double &c_im, const int &coun
         z_im = c_im + new_im;
     }
 
+    return i;
+}
+
+inline int mandel(const complex<double> &c, const int &count) {
+    complex<double> z(0.0, 0.0);
+    int i(0);
+    while(i < count && abs(z) < 2) {
+        z = z * z + c;
+        ++i;
+    }
     return i;
 }
 
