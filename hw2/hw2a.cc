@@ -4,6 +4,9 @@
 #ifdef PERF
 //#include "perf.hpp"
 #endif
+#include "util.h"
+#include <boost/range/irange.hpp>
+#include <cassert>
 #include <chrono>
 #include <complex>
 #include <iostream>
@@ -11,20 +14,16 @@
 #include <png.h>
 #include <pthread.h>
 #include <sched.h>
-#include <cassert>
-#include <boost/range/irange.hpp>
 
 static void *producer(void *data);
 void write_png(const char *filename, int iters, int width, int height,
                const int *buffer);
 
-double left, right;
-double lower, upper;
-double dx, dy;
-int width, height;
-int image_size;
-int iters;
-int num_thread;
+SetOnce<double> left, right;
+SetOnce<double> lower, upper;
+SetOnce<double> dx, dy;
+SetOnce<int> width, height;
+SetOnce<int> image_size, iters, num_thread;
 int *image(nullptr);
 int scheduled_idx(0);
 
@@ -52,10 +51,10 @@ int main(int argc, char **argv) {
     image_size = width * height;
     image = new int[image_size];
     pthread_mutex_init(&mutex, NULL);
-    pthread_t threads[num_thread];
-    cpu_set_t thread_cpu[num_thread];
-    dx = static_cast<double> ((right - left) / width);
-    dy = static_cast<double> ((upper - lower) / height);
+    pthread_t threads[num_thread.get()];
+    cpu_set_t thread_cpu[num_thread.get()];
+    dx = static_cast<double>((right - left) / width);
+    dy = static_cast<double>((upper - lower) / height);
 
     for (int i = 0; i < num_thread; ++i) {
         pthread_create(&threads[i], NULL, producer, NULL);
@@ -71,7 +70,9 @@ int main(int argc, char **argv) {
     }
 #ifdef PERF
     auto comp_end = std::chrono::high_resolution_clock::now();
-    auto comp_time = std::chrono::duration_cast<std::chrono::nanoseconds>(comp_end - comp_start).count();
+    auto comp_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         comp_end - comp_start)
+                         .count();
     std::cout << "Computation time: " << comp_time << " ns" << std::endl;
 #endif
 #ifdef PERF
@@ -80,14 +81,18 @@ int main(int argc, char **argv) {
     write_png(filename, iters, width, height, image);
 #ifdef PERF
     auto png_end = std::chrono::high_resolution_clock::now();
-    auto png_time = std::chrono::duration_cast<std::chrono::nanoseconds>(png_end - png_start).count();
+    auto png_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        png_end - png_start)
+                        .count();
     std::cout << "Write image time: " << png_time << " ns" << std::endl;
 #endif
 
     delete[](image);
 #ifdef PERF
     auto glob_end = std::chrono::high_resolution_clock::now();
-    auto glob_time = std::chrono::duration_cast<std::chrono::nanoseconds>(glob_end - glob_start).count();
+    auto glob_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         glob_end - glob_start)
+                         .count();
     std::cout << "Total time: " << glob_time << " ns" << std::endl;
 #endif
 
@@ -114,7 +119,7 @@ static void *producer(void *data) {
         //     scheduled_idx = image_size;
         //     end_flag = true;
         // }
-        if(__builtin_expect((start_idx + tile_size < image_size), true)) {
+        if (__builtin_expect((start_idx + tile_size < image_size), true)) {
             scheduled_idx += tile_size;
         } else {
             scheduled_idx = image_size;
@@ -126,13 +131,14 @@ static void *producer(void *data) {
         // } else {
         //     end_idx = start_idx + tile_size;
         // }
-        if(__builtin_expect(end_flag, false)){
+        if (__builtin_expect(end_flag, false)) {
             end_idx = image_size;
         } else {
             end_idx = start_idx + tile_size;
         }
-        for(auto pixel_idx : boost::irange(start_idx, end_idx)) {
-            double y0((pixel_idx / width) * dy + lower), x0((pixel_idx % width) * dx + left);
+        for (auto pixel_idx : boost::irange(start_idx, end_idx)) {
+            double y0((pixel_idx / width) * dy + lower),
+                x0((pixel_idx % width) * dx + left);
             int repeats(0);
             double x(0.0), y(0.0), length_squared(0.0);
             while (repeats < iters && length_squared < 4) {
@@ -147,7 +153,7 @@ static void *producer(void *data) {
         // if(end_flag) {
         //     break;
         // }
-        if(__builtin_expect((end_flag), false)) {
+        if (__builtin_expect((end_flag), false)) {
             break;
         }
     }
@@ -172,10 +178,10 @@ void write_png(const char *filename, int iters, int width, int height,
     png_set_compression_level(png_ptr, 1);
     size_t row_size = 3 * width * sizeof(png_byte);
     png_bytep row = (png_bytep)malloc(row_size);
-    #pragma clang loop unroll(enable)
+#pragma clang loop unroll(enable)
     for (int y = 0; y < height; ++y) {
-        std::fill(row, row+row_size, 0);
-        #pragma clang loop vectorize(enable)
+        std::fill(row, row + row_size, 0);
+#pragma clang loop vectorize(enable)
         for (int x = 0; x < width; ++x) {
             int p = buffer[(height - 1 - y) * width + x];
             png_bytep color = row + x * 3;
