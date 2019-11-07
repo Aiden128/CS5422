@@ -66,7 +66,6 @@ static void create_tasks(int image_width, int image_height) {
     int task_count = (width * height) / tile_size;
     int res = (width * height) % tile_size;
 
-    int sche_x(0), sche_y(0);
     int scheduled_idx(0);
     for(int i = 0; i < task_count; ++i) {
         int xi = ((scheduled_idx) / image_height);
@@ -194,18 +193,20 @@ void process_mandelbrot_set() {
     pthread_t producer_threads[num_thread];
 
     // Debug
-    std::cout << "Print schedule" << std::endl;
-    int size = task_queue.size();
-    for(int i = 0; i < size; ++i) {
-        schedule_data backup = task_queue.front();
-        std::cout<< task_queue.front().x0<< ", " << task_queue.front().y0 << ", " << task_queue.front().x1<< ", " << task_queue.front().y1<< ", \n"; 
-        task_queue.pop();
-        task_queue.push(backup);
-    }
-    exit(0);
+    // std::cout << "Print schedule" << std::endl;
+    // int size = task_queue.size();
+    // for(int i = 0; i < size; ++i) {
+    //     schedule_data backup = task_queue.front();
+    //     std::cout<< task_queue.front().x0<< ", " << task_queue.front().y0 << ", " << task_queue.front().x1<< ", " << task_queue.front().y1<< ", \n"; 
+    //     task_queue.pop();
+    //     task_queue.push(backup);
+    // }
+    // exit(0);
 
     for (int i = 0; i < num_thread; i++) {
         pthread_create(&producer_threads[i], NULL, producer, NULL);
+    }
+    for (int i = 0; i < num_thread; i++) {
         pthread_join(producer_threads[i], NULL);
     }
 }
