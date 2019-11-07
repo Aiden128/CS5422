@@ -1,6 +1,5 @@
 #ifndef UTIL_H
 #define UTIL_H
-#include <mutex>
 template <typename T, typename Counter = unsigned char> class SetOnce {
   public:
     SetOnce(const T &initval = T(), const Counter &initcount = 1)
