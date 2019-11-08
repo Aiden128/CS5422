@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
     const double dx = static_cast<double>((right - left) / width);
     const double dy = static_cast<double>((upper - lower) / height);
     const int image_size(width * height);
-    const int buffer_size(width + 1);
+    const int buffer_size(width * 2 + 1);
 
     int task_num, rank;
     MPI_Status status;
@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
         } else {
             int active_nodes(0);
             int node_id(1);
-            for (int i = 0; i < height; ++i) {
+            for (int i = 0; i < height; i+=2) {
                 if (node_id < task_num) {
                     MPI_Isend(&i, 1, MPI::INT, node_id, tag::DATA,
                               MPI_COMM_WORLD, &request);
@@ -85,8 +85,16 @@ int main(int argc, char **argv) {
                     MPI_Isend(&i, 1, MPI::INT, status.MPI_SOURCE, tag::DATA,
                               MPI_COMM_WORLD, &request);
                     ++active_nodes;
-                    std::copy_n((buffer + 1), (buffer_size - 1),
-                                (image + buffer[0] * width));
+                    if ((buffer[0] == (height-1))) {
+                        std::copy_n((buffer + 1), (buffer_size - 1) / 2,
+                                    (image + buffer[0] * width));
+                    } else if ((buffer[0] == (height-2))){
+                        std::copy_n((buffer + 1), (buffer_size - 1),
+                                    (image + buffer[0] * width));
+                    } else {
+                        std::copy_n((buffer + 1), (buffer_size - 1),
+                                    (image + buffer[0] * width));
+                    }
                 }
             }
             while (active_nodes > 0) {
@@ -96,8 +104,16 @@ int main(int argc, char **argv) {
                 --active_nodes;
                 MPI_Isend(&info, 1, MPI::INT, status.MPI_SOURCE, tag::TERMINATE,
                           MPI_COMM_WORLD, &request);
-                std::copy_n((buffer + 1), (buffer_size - 1),
-                            (image + buffer[0] * width));
+                if ((buffer[0] == (height-1))) {
+                        std::copy_n((buffer + 1), (buffer_size - 1) / 2,
+                                    (image + buffer[0] * width));
+                } else if ((buffer[0] == (height-2))){
+                    std::copy_n((buffer + 1), (buffer_size - 1),
+                               (image + buffer[0] * width));
+                } else {
+                    std::copy_n((buffer + 1), (buffer_size - 1),
+                                (image + buffer[0] * width));
+                }
             }
         }
         write_png(filename, iters, width, height, image);
@@ -125,6 +141,22 @@ int main(int argc, char **argv) {
                     ++repeats;
                 }
                 buffer[j + 1] = repeats;
+            }
+            y0 = ((i+1) * dy + lower);
+            int offset = 1 + width;
+            #pragma omp parallel for schedule(dynamic, 100)
+            for (int j = 0; j < width; ++j) {
+                double x0(j * dx + left);
+                int repeats(0);
+                double x(0.0), y(0.0), length_squared(0.0);
+                while (repeats < iters && length_squared < 4.0) {
+                    double temp(x * x - y * y + x0);
+                    y = 2 * x * y + y0;
+                    x = temp;
+                    length_squared = x * x + y * y;
+                    ++repeats;
+                }
+                buffer[j + offset] = repeats;
             }
             MPI_Send(buffer, buffer_size, MPI::INT, 0, tag::RESULT,
                      MPI_COMM_WORLD);
