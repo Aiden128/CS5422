@@ -4,7 +4,6 @@
 #ifdef PERF
 //#include "perf.hpp"
 #endif
-#include "util.h"
 #include <algorithm>
 #include <boost/range/irange.hpp>
 #include <cassert>
@@ -39,7 +38,8 @@ int main(int argc, char **argv) {
     const double dx = static_cast<double>((right - left) / width);
     const double dy = static_cast<double>((upper - lower) / height);
     const int image_size(width * height);
-    const int buffer_size(width * 2 + 1);
+    const int tile(2);
+    const int buffer_size(width * tile + 1);
 
     int task_num, rank;
     MPI_Status status;
@@ -48,11 +48,11 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &task_num);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    if (rank == 0) {
+    if (__builtin_expect(rank == 0, false)) {
         int *image(new int[image_size]);
         int *buffer(new int[buffer_size]);
         // Manager
-        if (task_num == 1) {
+        if (__builtin_expect(task_num == 1, false)) {
 #pragma omp parallel for schedule(dynamic, 100)
             // Finish drawing smoothly
             for (int pixel_idx = 0; pixel_idx < image_size; ++pixel_idx) {
@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
         } else {
             int active_nodes(0);
             int node_id(1);
-            for (int i = 0; i < height; i+=2) {
+            for (int i = 0; i < height; i += tile) {
                 if (node_id < task_num) {
                     MPI_Isend(&i, 1, MPI::INT, node_id, tag::DATA,
                               MPI_COMM_WORLD, &request);
@@ -85,11 +85,8 @@ int main(int argc, char **argv) {
                     MPI_Isend(&i, 1, MPI::INT, status.MPI_SOURCE, tag::DATA,
                               MPI_COMM_WORLD, &request);
                     ++active_nodes;
-                    if ((buffer[0] == (height-1))) {
+                    if (__builtin_expect(buffer[0] == (height - 1), false)) {
                         std::copy_n((buffer + 1), (buffer_size - 1) / 2,
-                                    (image + buffer[0] * width));
-                    } else if ((buffer[0] == (height-2))){
-                        std::copy_n((buffer + 1), (buffer_size - 1),
                                     (image + buffer[0] * width));
                     } else {
                         std::copy_n((buffer + 1), (buffer_size - 1),
@@ -104,12 +101,9 @@ int main(int argc, char **argv) {
                 --active_nodes;
                 MPI_Isend(&info, 1, MPI::INT, status.MPI_SOURCE, tag::TERMINATE,
                           MPI_COMM_WORLD, &request);
-                if ((buffer[0] == (height-1))) {
-                        std::copy_n((buffer + 1), (buffer_size - 1) / 2,
-                                    (image + buffer[0] * width));
-                } else if ((buffer[0] == (height-2))){
-                    std::copy_n((buffer + 1), (buffer_size - 1),
-                               (image + buffer[0] * width));
+                if (__builtin_expect(buffer[0] == (height - 1), true)) {
+                    std::copy_n((buffer + 1), (buffer_size - 1) / 2,
+                                (image + buffer[0] * width));
                 } else {
                     std::copy_n((buffer + 1), (buffer_size - 1),
                                 (image + buffer[0] * width));
@@ -128,36 +122,26 @@ int main(int argc, char **argv) {
         while (status.MPI_TAG != tag::TERMINATE) {
             buffer[0] = i;
             double y0(i * dy + lower);
-#pragma omp parallel for schedule(dynamic, 100)
-            for (int j = 0; j < width; ++j) {
-                double x0(j * dx + left);
-                int repeats(0);
-                double x(0.0), y(0.0), length_squared(0.0);
-                while (repeats < iters && length_squared < 4.0) {
-                    double temp(x * x - y * y + x0);
-                    y = 2 * x * y + y0;
-                    x = temp;
-                    length_squared = x * x + y * y;
-                    ++repeats;
+#pragma omp parallel for schedule(dynamic, 100) collapse(2) 
+{
+            for (int tile_idx = 0; tile_idx < tile; ++tile_idx) {
+                for (int j = 0; j < width; ++j) {
+                    y0 = ((i + tile_idx) * dy + lower);
+                    int offset(1 + tile_idx * width + j);
+                    double x0(j * dx + left);
+                    int repeats(0);
+                    double x(0.0), y(0.0), length_squared(0.0);
+                    while (repeats < iters && length_squared < 4.0) {
+                        double temp(x * x - y * y + x0);
+                        y = 2 * x * y + y0;
+                        x = temp;
+                        length_squared = x * x + y * y;
+                        ++repeats;
+                    }
+                    buffer[offset] = repeats;
                 }
-                buffer[j + 1] = repeats;
             }
-            y0 = ((i+1) * dy + lower);
-            int offset = 1 + width;
-            #pragma omp parallel for schedule(dynamic, 100)
-            for (int j = 0; j < width; ++j) {
-                double x0(j * dx + left);
-                int repeats(0);
-                double x(0.0), y(0.0), length_squared(0.0);
-                while (repeats < iters && length_squared < 4.0) {
-                    double temp(x * x - y * y + x0);
-                    y = 2 * x * y + y0;
-                    x = temp;
-                    length_squared = x * x + y * y;
-                    ++repeats;
-                }
-                buffer[j + offset] = repeats;
-            }
+}
             MPI_Send(buffer, buffer_size, MPI::INT, 0, tag::RESULT,
                      MPI_COMM_WORLD);
             MPI_Recv(&i, 1, MPI::INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -171,12 +155,9 @@ int main(int argc, char **argv) {
 void write_png(const char *filename, int iters, int width, int height,
                const int *buffer) {
     FILE *fp = fopen(filename, "wb");
-    assert(fp);
     png_structp png_ptr =
         png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    assert(png_ptr);
     png_infop info_ptr = png_create_info_struct(png_ptr);
-    assert(info_ptr);
     png_init_io(png_ptr, fp);
     png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB,
                  PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
@@ -186,8 +167,10 @@ void write_png(const char *filename, int iters, int width, int height,
     png_set_compression_level(png_ptr, 1);
     size_t row_size = 3 * width * sizeof(png_byte);
     png_bytep row = (png_bytep)malloc(row_size);
+#pragma clang loop unroll(enable)
     for (int y = 0; y < height; ++y) {
         std::fill(row, row + row_size, 0);
+#pragma clang loop vectorize(enable)
         for (int x = 0; x < width; ++x) {
             int p = buffer[(height - 1 - y) * width + x];
             png_bytep color = row + x * 3;
