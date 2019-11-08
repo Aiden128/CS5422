@@ -163,12 +163,9 @@ static void *producer(void *data) {
 void write_png(const char *filename, int iters, int width, int height,
                const int *buffer) {
     FILE *fp = fopen(filename, "wb");
-    assert(fp);
     png_structp png_ptr =
         png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    assert(png_ptr);
     png_infop info_ptr = png_create_info_struct(png_ptr);
-    assert(info_ptr);
     png_init_io(png_ptr, fp);
     png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB,
                  PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
