@@ -39,7 +39,8 @@ int main(int argc, char **argv) {
     const double dy = static_cast<double>((upper - lower) / height);
     const int image_size(width * height);
     const int tile(2);
-    const int buffer_size(width * tile + 1);
+    const int data_size(width * tile);
+    const int buffer_size(data_size + 1);
 
     int task_num, rank;
     MPI_Status status;
@@ -51,6 +52,7 @@ int main(int argc, char **argv) {
     if (__builtin_expect(rank == 0, false)) {
         int *image(new int[image_size]);
         int *buffer(new int[buffer_size]);
+        int *data_ptr(buffer + 1);
         // Manager
         if (__builtin_expect(task_num == 1, false)) {
 #pragma omp parallel for schedule(dynamic, 100)
@@ -86,10 +88,10 @@ int main(int argc, char **argv) {
                               MPI_COMM_WORLD, &request);
                     ++active_nodes;
                     if (__builtin_expect(buffer[0] == (height - 1), false)) {
-                        std::copy_n((buffer + 1), (buffer_size - 1) / 2,
+                        std::copy_n(data_ptr, width,
                                     (image + buffer[0] * width));
                     } else {
-                        std::copy_n((buffer + 1), (buffer_size - 1),
+                        std::copy_n(data_ptr, data_size,
                                     (image + buffer[0] * width));
                     }
                 }
@@ -102,10 +104,10 @@ int main(int argc, char **argv) {
                 MPI_Isend(&info, 1, MPI::INT, status.MPI_SOURCE, tag::TERMINATE,
                           MPI_COMM_WORLD, &request);
                 if (__builtin_expect(buffer[0] == (height - 1), true)) {
-                    std::copy_n((buffer + 1), (buffer_size - 1) / 2,
+                    std::copy_n(data_ptr, width,
                                 (image + buffer[0] * width));
                 } else {
-                    std::copy_n((buffer + 1), (buffer_size - 1),
+                    std::copy_n(data_ptr, data_size,
                                 (image + buffer[0] * width));
                 }
             }
