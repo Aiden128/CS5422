@@ -14,7 +14,8 @@
 #include <png.h>
 #include <pthread.h>
 #include <sched.h>
-
+#include <x86intrin.h>
+#include <emmintrin.h>
 static void *producer(void *data);
 void write_png(const char *filename, int iters, int width, int height,
                const int *buffer);
@@ -102,6 +103,15 @@ int main(int argc, char **argv) {
 static void *producer(void *data) {
     int start_idx(0), end_idx(0);
     bool end_flag(false);
+    // SSE implementation
+    const __m128d xmin = _mm_set_pd1(left);
+    const __m128d ymin = _mm_set_pd1(right);
+    const __m128d xscale = _mm_set_pd1((right - left) / width);
+    const __m128d yscale = _mm_set_pd1((upper - lower) / height);
+    const __m128d threshold = _mm_set_pd1(4.0);
+    const __m128d one = _mm_set_pd1(1);
+    const __m128d iters_scale = _mm_set_pd1(1.0 / iters);
+
     while (1) {
         pthread_mutex_lock(&mutex);
         if (__builtin_expect(scheduled_idx == (image_size), false)) {
@@ -121,20 +131,39 @@ static void *producer(void *data) {
         } else {
             end_idx = start_idx + tile_size;
         }
-        for (auto pixel_idx : boost::irange(start_idx, end_idx)) {
-            double y0((pixel_idx / width) * dy + lower),
-                x0((pixel_idx % width) * dx + left);
-            int repeats(0);
-            double x(0.0), y(0.0), length_squared(0.0);
-            while (repeats < iters && length_squared < 4) {
-                double temp(x * x - y * y + x0);
-                y = 2 * x * y + y0;
+
+        for(int pixel_idx = start_idx; (pixel_idx + 1) < end_idx; pixel_idx += 2) {
+            __m128d mx = _mm_set_pd((pixel_idx / width), (pixel_idx + 1) / width);
+            __m128d my = _mm_set_pd(pixel_idx % width, (pixel_idx + 1) % width);
+            __m128d y0 = _mm_add_pd(_mm_mul_pd(my, yscale), ymin);
+            __m128d x0 = _mm_add_pd(_mm_mul_pd(mx, xscale), xmin);
+            __m128i repeats = _mm_setzero_si128();
+            __m128d x = _mm_set_pd(0.0, 0.0);
+            __m128d y = _mm_set_pd(0.0, 0.0);
+            __m128d length_squared = _mm_set_pd(0.0, 0.0);
+            for(int i = 0; i < iters; ++i) {
+                __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y)), x0);
+                __m128d x_y = _mm_mul_pd(x, y);
+                y = _mm_add_pd(_mm_add_pd(x_y, x_y), y0);
                 x = temp;
-                length_squared = x * x + y * y;
-                ++repeats;
+                length_squared = _mm_add_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y));
+                // Todo: exception
             }
-            image[pixel_idx] = repeats;
         }
+        // for (auto pixel_idx : boost::irange(start_idx, end_idx)) {
+        //     double y0((pixel_idx / width) * dy + lower),
+        //         x0((pixel_idx % width) * dx + left);
+        //     int repeats(0);
+        //     double x(0.0), y(0.0), length_squared(0.0);
+        //     while (repeats < iters && length_squared < 4) {
+        //         double temp(x * x - y * y + x0);
+        //         y = 2 * x * y + y0;
+        //         x = temp;
+        //         length_squared = x * x + y * y;
+        //         ++repeats;
+        //     }
+        //     image[pixel_idx] = repeats;
+        // }
         if (__builtin_expect((end_flag), false)) {
             break;
         }
