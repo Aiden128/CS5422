@@ -104,21 +104,11 @@ static void *producer(void *data) {
     bool end_flag(false);
     while (1) {
         pthread_mutex_lock(&mutex);
-        // if (scheduled_idx == (image_size)) {
-        //     pthread_mutex_unlock(&mutex);
-        //     break;
-        // }
         if (__builtin_expect(scheduled_idx == (image_size), false)) {
             pthread_mutex_unlock(&mutex);
             break;
         }
         start_idx = scheduled_idx;
-        // if(start_idx + tile_size < image_size) {
-        //     scheduled_idx += tile_size;
-        // } else {
-        //     scheduled_idx = image_size;
-        //     end_flag = true;
-        // }
         if (__builtin_expect((start_idx + tile_size < image_size), true)) {
             scheduled_idx += tile_size;
         } else {
@@ -126,11 +116,6 @@ static void *producer(void *data) {
             end_flag = true;
         }
         pthread_mutex_unlock(&mutex);
-        // if(end_flag) {
-        //     end_idx = image_size;
-        // } else {
-        //     end_idx = start_idx + tile_size;
-        // }
         if (__builtin_expect(end_flag, false)) {
             end_idx = image_size;
         } else {
@@ -150,9 +135,6 @@ static void *producer(void *data) {
             }
             image[pixel_idx] = repeats;
         }
-        // if(end_flag) {
-        //     break;
-        // }
         if (__builtin_expect((end_flag), false)) {
             break;
         }
