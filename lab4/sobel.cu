@@ -99,14 +99,14 @@ int main(int argc, char** argv) {
     unsigned char* host_t = (unsigned char*) malloc(height * width * channels * sizeof(unsigned char));
 
     cudaMemcpy2D(device_s+2*pitch+2*channels, pitch, host_s, width * sizeof(unsigned char)* channels ,width * channels * sizeof(unsigned char), height, cudaMemcpyHostToDevice);
-    sobel<<<(height/256) + 1, 256>>>(device_s, device_t, height, width, channels,pitch);
+    sobel<<<(height/128) + 1, 128>>>(device_s, device_t, height, width, channels,pitch);
     cudaMemcpy2D(host_t , width * sizeof(unsigned char)* channels, device_t+2*pitch+2*channels, pitch , width * channels * sizeof(unsigned char), height, cudaMemcpyDeviceToHost);
 
     write_png(argv[2], host_t, height, width, channels);
 
     cudaFree(device_s);
     cudaFree(device_t);
-    free(host_s);
+    cudaFreeHost(host_s);
     free(host_t);
 
     return 0;
