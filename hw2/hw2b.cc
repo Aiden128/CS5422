@@ -106,28 +106,35 @@ int main(int argc, char **argv) {
             // int start_idx(i * width);
             // int end_idx(start_idx + data_size);
             // int buffer_idx(1);
-#pragma omp parallel for schedule(dynamic, 100) collapse(2)
+#pragma omp parallel for schedule(dynamic, 1)
             {
                 for (int tile_idx = 0; tile_idx < tile; ++tile_idx) {
-                    //int pixel_idx(width * (i + tile_idx));
-                    //ispc::mandelbrot_omp_ispc(left, lower, dx, dy, width, iters, 0, width, pixel_idx, buffer);
-                    for (int j = 0; j < width; ++j) {
-                        y0 = ((i + tile_idx) * dy + lower);
-                        int offset(1 + tile_idx * width + j);
-                        double x0(j * dx + left);
-                        int repeats(0);
-                        double x(0.0), y(0.0), length_squared(0.0);
-                        while (repeats < iters && length_squared < 4.0) {
-                            double temp(x * x - y * y + x0);
-                            y = 2 * x * y + y0;
-                            x = temp;
-                            length_squared = x * x + y * y;
-                            ++repeats;
-                        }
-                        buffer[offset] = repeats;
-                    }
+                    int pixel_idx((i + tile_idx) * width);
+                    int start_idx(tile_idx * width + 1);
+                    int end_idx(start_idx + width);
+                    ispc::mandelbrot_omp_ispc(left, lower, dx, dy, width, iters, start_idx, end_idx, pixel_idx, buffer);
+                    // for (int j = 0; j < width; ++j) {
+                    //     y0 = ((i + tile_idx) * dy + lower);
+                    //     int offset(1 + tile_idx * width + j);
+                    //     double x0(j * dx + left);
+                    //     int repeats(0);
+                    //     double x(0.0), y(0.0), length_squared(0.0);
+                    //     while (repeats < iters && length_squared < 4.0) {
+                    //         double temp(x * x - y * y + x0);
+                    //         y = 2 * x * y + y0;
+                    //         x = temp;
+                    //         length_squared = x * x + y * y;
+                    //         ++repeats;
+                    //     }
+                    //     buffer[offset] = repeats;
+                    // }
                 }
             }
+            std::cout << "Row: " << buffer[0] << ", ";
+            for(int i = 1; i < buffer_size; ++i) {
+                std::cout << buffer[i] << " ";
+            }
+            std::cout << std::endl;
             MPI_Send(buffer, buffer_size, MPI::INT, 0, tag::RESULT,
                      MPI_COMM_WORLD);
             MPI_Recv(&i, 1, MPI::INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);

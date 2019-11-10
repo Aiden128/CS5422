@@ -41,7 +41,7 @@ export void mandelbrot_omp_ispc(uniform double x0, uniform double y0,
 
         double x = (pixel_idx % width) * dx + x0;
         double y = (pixel_idx / width) * dy + y0;
-
+        pixel_idx++;
         output[i] = mandel(x, y, maxIterations);
     }
 }
