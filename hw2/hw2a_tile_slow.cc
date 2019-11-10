@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #endif
 #include <boost/range/irange.hpp>
+#include <cassert>
 #include <chrono>
 #include <complex>
 #include <iostream>
@@ -10,7 +11,6 @@
 #include <pthread.h>
 #include <queue>
 #include <sched.h>
-#include <cassert>
 
 static void create_tasks(int image_width, int image_height);
 static void *producer(void *data);
@@ -67,7 +67,7 @@ static void create_tasks(int image_width, int image_height) {
     int res = (width * height) % tile_size;
 
     int scheduled_idx(0);
-    for(int i = 0; i < task_count; ++i) {
+    for (int i = 0; i < task_count; ++i) {
         int xi = ((scheduled_idx) / image_height);
         int yi = (scheduled_idx) % image_height;
         scheduled_idx += tile_size;
@@ -107,7 +107,7 @@ static void *producer(void *data) {
         task_queue.pop();
         pthread_mutex_unlock(mutex);
 
-        if(job_data.x0 == job_data.x1) {
+        if (job_data.x0 == job_data.x1) {
             for (int j = job_data.y0; j <= job_data.y1; ++j) {
                 double y0 = j * ((upper - lower) / height) + lower;
                 for (int i = job_data.x0; i <= job_data.x1; ++i) {
@@ -129,7 +129,7 @@ static void *producer(void *data) {
         } else {
             for (int j = job_data.y0; j < height; ++j) {
                 double y0 = j * ((upper - lower) / height) + lower;
-                for(int i = job_data.x0; i <= job_data.x0; ++i) {
+                for (int i = job_data.x0; i <= job_data.x0; ++i) {
                     double x0 = i * ((right - left) / width) + left;
                     int repeats = 0;
                     double x = 0;
@@ -145,7 +145,8 @@ static void *producer(void *data) {
                     image[j * width + i] = repeats;
                 }
             }
-            for (int count = 0; count < (job_data.x1 - job_data.x0 - 1); ++count) {
+            for (int count = 0; count < (job_data.x1 - job_data.x0 - 1);
+                 ++count) {
                 for (int j = 0; j <= height; ++j) {
                     double y0 = j * ((upper - lower) / height) + lower;
                     for (int i = job_data.x0 + 1; i < job_data.x1; ++i) {
@@ -167,7 +168,7 @@ static void *producer(void *data) {
             }
             for (int j = 0; j <= job_data.y1; ++j) {
                 double y0 = j * ((upper - lower) / height) + lower;
-                for(int i = job_data.x1; i <= job_data.x1; ++i) {
+                for (int i = job_data.x1; i <= job_data.x1; ++i) {
                     double x0 = i * ((right - left) / width) + left;
                     int repeats = 0;
                     double x = 0;
@@ -197,9 +198,9 @@ void process_mandelbrot_set() {
     // int size = task_queue.size();
     // for(int i = 0; i < size; ++i) {
     //     schedule_data backup = task_queue.front();
-    //     std::cout<< task_queue.front().x0<< ", " << task_queue.front().y0 << ", " << task_queue.front().x1<< ", " << task_queue.front().y1<< ", \n"; 
-    //     task_queue.pop();
-    //     task_queue.push(backup);
+    //     std::cout<< task_queue.front().x0<< ", " << task_queue.front().y0 <<
+    //     ", " << task_queue.front().x1<< ", " << task_queue.front().y1<< ",
+    //     \n"; task_queue.pop(); task_queue.push(backup);
     // }
     // exit(0);
 
