@@ -4,6 +4,7 @@
 #ifdef PERF
 //#include "perf.hpp"
 #endif
+#include "objs/mandelbrot_ispc.h"
 #include <algorithm>
 #include <boost/range/irange.hpp>
 #include <cassert>
@@ -38,7 +39,7 @@ int main(int argc, char **argv) {
     const double dx = static_cast<double>((right - left) / width);
     const double dy = static_cast<double>((upper - lower) / height);
     const int image_size(width * height);
-    const int tile(2);
+    const int tile(10);
     const int data_size(width * tile);
     const int buffer_size(data_size + 1);
 
@@ -50,100 +51,83 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     if (__builtin_expect(rank == 0, false)) {
+        // Manager
         int *image(new int[image_size]);
         int *buffer(new int[buffer_size]);
         int *data_ptr(buffer + 1);
-        // Manager
-        if (__builtin_expect(task_num == 1, false)) {
-#pragma omp parallel for schedule(dynamic, 100)
-            // Finish drawing smoothly
-            for (int pixel_idx = 0; pixel_idx < image_size; ++pixel_idx) {
-                double y0((pixel_idx / width) * dy + lower),
-                    x0((pixel_idx % width) * dx + left);
-                int repeats(0);
-                double x(0.0), y(0.0), length_squared(0.0);
-                while (repeats < iters && length_squared < 4) {
-                    double temp(x * x - y * y + x0);
-                    y = 2 * x * y + y0;
-                    x = temp;
-                    length_squared = x * x + y * y;
-                    ++repeats;
-                }
-                image[pixel_idx] = repeats;
-            }
-        } else {
-            int active_nodes(0);
-            int node_id(1);
-            for (int i = 0; i < height; i += tile) {
-                if (node_id < task_num) {
-                    MPI_Isend(&i, 1, MPI::INT, node_id, tag::DATA,
-                              MPI_COMM_WORLD, &request);
-                    ++node_id;
-                    ++active_nodes;
-                } else {
-                    MPI_Recv(buffer, buffer_size, MPI::INT, MPI_ANY_SOURCE,
-                             tag::RESULT, MPI_COMM_WORLD, &status);
-                    --active_nodes;
-                    MPI_Isend(&i, 1, MPI::INT, status.MPI_SOURCE, tag::DATA,
-                              MPI_COMM_WORLD, &request);
-                    ++active_nodes;
-                    if (__builtin_expect(buffer[0] == (height - 1), false)) {
-                        std::copy_n(data_ptr, width,
-                                    (image + buffer[0] * width));
-                    } else {
-                        std::copy_n(data_ptr, data_size,
-                                    (image + buffer[0] * width));
-                    }
-                }
-            }
-            while (active_nodes > 0) {
-                int info(-1);
+        int active_nodes(0);
+        int node_id(1);
+        for (int i = 0; i < height; i += tile) {
+            if (node_id < task_num) {
+                MPI_Isend(&i, 1, MPI::INT, node_id, tag::DATA, MPI_COMM_WORLD,
+                          &request);
+                ++node_id;
+                ++active_nodes;
+            } else {
                 MPI_Recv(buffer, buffer_size, MPI::INT, MPI_ANY_SOURCE,
                          tag::RESULT, MPI_COMM_WORLD, &status);
                 --active_nodes;
-                MPI_Isend(&info, 1, MPI::INT, status.MPI_SOURCE, tag::TERMINATE,
+                MPI_Isend(&i, 1, MPI::INT, status.MPI_SOURCE, tag::DATA,
                           MPI_COMM_WORLD, &request);
-                if (__builtin_expect(buffer[0] == (height - 1), true)) {
-                    std::copy_n(data_ptr, width,
-                                (image + buffer[0] * width));
+                ++active_nodes;
+                if (__builtin_expect(buffer[0] == (height - (height % tile)), false)) {
+                    std::copy_n(data_ptr, width * (height % tile), (image + buffer[0] * width));
                 } else {
                     std::copy_n(data_ptr, data_size,
                                 (image + buffer[0] * width));
                 }
             }
         }
+        while (active_nodes > 0) {
+            int info(-1);
+            MPI_Recv(buffer, buffer_size, MPI::INT, MPI_ANY_SOURCE, tag::RESULT,
+                     MPI_COMM_WORLD, &status);
+            --active_nodes;
+            MPI_Isend(&info, 1, MPI::INT, status.MPI_SOURCE, tag::TERMINATE,
+                      MPI_COMM_WORLD, &request);
+            if (__builtin_expect(buffer[0] == (height - (height % tile)), true)) {
+                std::copy_n(data_ptr, width * (height % tile), (image + buffer[0] * width));
+            } else {
+                std::copy_n(data_ptr, data_size, (image + buffer[0] * width));
+            }
+        }
         write_png(filename, iters, width, height, image);
         delete[](buffer);
         delete[](image);
     } else {
-        int *buffer(new int[buffer_size]);
         // Worker
+        int *buffer(new int[buffer_size]);
         int i(0);
         // Receive from manager
         MPI_Recv(&i, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         while (status.MPI_TAG != tag::TERMINATE) {
             buffer[0] = i;
             double y0(i * dy + lower);
-#pragma omp parallel for schedule(dynamic, 100) collapse(2) 
-{
-            for (int tile_idx = 0; tile_idx < tile; ++tile_idx) {
-                for (int j = 0; j < width; ++j) {
-                    y0 = ((i + tile_idx) * dy + lower);
-                    int offset(1 + tile_idx * width + j);
-                    double x0(j * dx + left);
-                    int repeats(0);
-                    double x(0.0), y(0.0), length_squared(0.0);
-                    while (repeats < iters && length_squared < 4.0) {
-                        double temp(x * x - y * y + x0);
-                        y = 2 * x * y + y0;
-                        x = temp;
-                        length_squared = x * x + y * y;
-                        ++repeats;
+            // int start_idx(i * width);
+            // int end_idx(start_idx + data_size);
+            // int buffer_idx(1);
+#pragma omp parallel for schedule(dynamic, 100) collapse(2)
+            {
+                for (int tile_idx = 0; tile_idx < tile; ++tile_idx) {
+                    //int pixel_idx(width * (i + tile_idx));
+                    //ispc::mandelbrot_omp_ispc(left, lower, dx, dy, width, iters, 0, width, pixel_idx, buffer);
+                    for (int j = 0; j < width; ++j) {
+                        y0 = ((i + tile_idx) * dy + lower);
+                        int offset(1 + tile_idx * width + j);
+                        double x0(j * dx + left);
+                        int repeats(0);
+                        double x(0.0), y(0.0), length_squared(0.0);
+                        while (repeats < iters && length_squared < 4.0) {
+                            double temp(x * x - y * y + x0);
+                            y = 2 * x * y + y0;
+                            x = temp;
+                            length_squared = x * x + y * y;
+                            ++repeats;
+                        }
+                        buffer[offset] = repeats;
                     }
-                    buffer[offset] = repeats;
                 }
             }
-}
             MPI_Send(buffer, buffer_size, MPI::INT, 0, tag::RESULT,
                      MPI_COMM_WORLD);
             MPI_Recv(&i, 1, MPI::INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
