@@ -50,7 +50,13 @@ class Timer {
     };
     // TODO
     // void dump_to_yaml(const std::string &file_name);
-    // void dump_to_csv(const std::string &file_name);
+    inline void dump_csv(const std::string &file_name) {
+        file.open(file_name, std::ofstream::out | std::ofstream::app);
+        for(auto i : database) {
+            file << i.first << "," << i.second << "," << std::endl;
+        }
+        file.close();
+    };
   private:
     Entry start_dict;
     Record database;
