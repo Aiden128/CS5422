@@ -2,14 +2,11 @@
 #define _GNU_SOURCE
 #endif
 #ifdef PERF
-//#include "perf.hpp"
+//#include "timer.hpp"
 #endif
 #include "objs/mandelbrot_ispc.h"
 #include "util.h"
 #include <boost/range/irange.hpp>
-#include <cassert>
-#include <chrono>
-#include <complex>
 #include <iostream>
 #include <limits>
 #include <png.h>
@@ -29,11 +26,12 @@ int *image(nullptr);
 int scheduled_idx(0);
 
 const int tile_size(50);
-pthread_mutex_t mutex;
+pthread_spinlock_t lock;
 
 int main(int argc, char **argv) {
 #ifdef PERF
-    auto glob_start = std::chrono::high_resolution_clock::now();
+    Timer timer;
+    timer.start("Global");
 #endif
 
     // Get number of CPUs available
@@ -51,7 +49,7 @@ int main(int argc, char **argv) {
     height = strtol(argv[8], 0, 10);
     image_size = width * height;
     image = new int[image_size];
-    pthread_mutex_init(&mutex, NULL);
+    pthread_spin_init(&lock, 0);
     pthread_t threads[num_thread.get()];
     cpu_set_t thread_cpu[num_thread.get()];
     dx = static_cast<double>((right - left) / width);
@@ -64,37 +62,26 @@ int main(int argc, char **argv) {
         pthread_setaffinity_np(threads[i], sizeof(cpu_set_t), &thread_cpu[i]);
     }
 #ifdef PERF
-    auto comp_start = std::chrono::high_resolution_clock::now();
+    timer.start("Computation");
 #endif
     for (int i = 0; i < num_thread; ++i) {
         pthread_join(threads[i], NULL);
     }
 #ifdef PERF
-    auto comp_end = std::chrono::high_resolution_clock::now();
-    auto comp_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                         comp_end - comp_start)
-                         .count();
-    std::cout << "Computation time: " << comp_time << " ns" << std::endl;
-#endif
-#ifdef PERF
-    auto png_start = std::chrono::high_resolution_clock::now();
+    timer.end("Computation");
+    timer.start("Write PNG");
 #endif
     write_png(filename, iters, width, height, image);
 #ifdef PERF
-    auto png_end = std::chrono::high_resolution_clock::now();
-    auto png_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        png_end - png_start)
-                        .count();
-    std::cout << "Write image time: " << png_time << " ns" << std::endl;
+    timer.end("Write PNG");
 #endif
 
     delete[](image);
 #ifdef PERF
-    auto glob_end = std::chrono::high_resolution_clock::now();
-    auto glob_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                         glob_end - glob_start)
-                         .count();
-    std::cout << "Total time: " << glob_time << " ns" << std::endl;
+    timer.end("Global");
+    timer.dump_to_stdout("Global");
+    timer.dump_to_stdout("Computation");
+    timer.dump_to_stdout("Write PNG");
 #endif
 
     return 0;
@@ -105,9 +92,9 @@ static void *producer(void *data) {
     bool end_flag(false);
 
     while (1) {
-        pthread_mutex_lock(&mutex);
+        pthread_spin_lock(&lock);
         if (__builtin_expect(scheduled_idx == (image_size), false)) {
-            pthread_mutex_unlock(&mutex);
+            pthread_spin_unlock(&lock);
             break;
         }
         start_idx = scheduled_idx;
@@ -117,7 +104,7 @@ static void *producer(void *data) {
             scheduled_idx = image_size;
             end_flag = true;
         }
-        pthread_mutex_unlock(&mutex);
+        pthread_spin_unlock(&lock);
         if (__builtin_expect(end_flag, false)) {
             end_idx = image_size;
         } else {
