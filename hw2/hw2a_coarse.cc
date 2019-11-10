@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
 
     num_thread = (CPU_COUNT(&cpu_set));
-    //const int num_thread(2);
+    // const int num_thread(2);
     const char *filename(argv[1]);
     iters = (strtol(argv[2], 0, 10));
     left = (strtod(argv[3], 0));
@@ -57,20 +57,21 @@ int main(int argc, char **argv) {
     thread_data *threadD(new thread_data[num_thread]);
 
 #ifdef DEBUG
-    pthread_barrier_init(&barrier,NULL,num_thread);
+    pthread_barrier_init(&barrier, NULL, num_thread);
 #endif
     for (int i = 0; i < num_thread; ++i) {
         threadD[i].threadID = i;
         threadD[i].image = image;
         // Create threads
-        pthread_create(&threads[i], NULL, Op, reinterpret_cast<void *>(&threadD[i]));
+        pthread_create(&threads[i], NULL, Op,
+                       reinterpret_cast<void *>(&threadD[i]));
     }
     pthread_join(threads[0], NULL);
     for (int i = 0; i < num_thread; ++i) {
         pthread_join(threads[i], NULL);
     }
 #ifdef DEBUG
-    seq_check(true,iters, left, right, lower, upper, width, height, image);
+    seq_check(true, iters, left, right, lower, upper, width, height, image);
     pthread_barrier_destroy(&barrier);
 #endif
     write_png(filename, iters, width, height, image);
@@ -92,7 +93,8 @@ void *Op(void *threadD) {
 #ifdef DEBUG
     pthread_mutex_lock(&mutex);
     cout << "Thread ID: " << args->threadID << endl;
-    cout << "Start, end, total: " << startRow << ", " << endRow << ", " << totalRows << endl;
+    cout << "Start, end, total: " << startRow << ", " << endRow << ", "
+         << totalRows << endl;
     pthread_mutex_unlock(&mutex);
 #endif
 

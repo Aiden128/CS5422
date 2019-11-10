@@ -78,7 +78,6 @@ int main(int argc, char **argv) {
     }
     timer.end("omp_simd");
 
-
     timer.print_stdout("omp_normal");
     timer.print_stdout("omp_simd");
 
@@ -106,8 +105,8 @@ void write_png(const char *filename, int iters, int width, int height,
     size_t row_size = 3 * width * sizeof(png_byte);
     png_bytep row = (png_bytep)malloc(row_size);
     for (int y = 0; y < height; ++y) {
-        //memset(row, 0, row_size);
-        fill(row, row+row_size, 0);
+        // memset(row, 0, row_size);
+        fill(row, row + row_size, 0);
         for (int x = 0; x < width; ++x) {
             int p = buffer[(height - 1 - y) * width + x];
             png_bytep color = row + x * 3;

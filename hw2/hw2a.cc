@@ -4,8 +4,8 @@
 #ifdef PERF
 //#include "perf.hpp"
 #endif
-#include "util.h"
 #include "objs/mandelbrot_ispc.h"
+#include "util.h"
 #include <boost/range/irange.hpp>
 #include <cassert>
 #include <chrono>
@@ -123,7 +123,8 @@ static void *producer(void *data) {
         } else {
             end_idx = start_idx + tile_size;
         }
-        ispc::mandelbrot_ispc(left, lower, dx, dy, width, iters, start_idx, end_idx, image);
+        ispc::mandelbrot_ispc(left, lower, dx, dy, width, iters, start_idx,
+                              end_idx, image);
         // for (auto pixel_idx : boost::irange(start_idx, end_idx)) {
         //     double y0((pixel_idx / width) * dy + lower),
         //         x0((pixel_idx % width) * dx + left);
