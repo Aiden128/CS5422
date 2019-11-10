@@ -1,17 +1,19 @@
 CC = clang
-CXX = clang++
-LDLIBS = -lpng
-CXXFLAGS = -lm -O3
-hw2a: CXXFLAGS += -pthread -O3 -march=native
-hw2b: CC = mpicc
-hw2b: CXX = mpicxx
-hw2b: CXXFLAGS += -fopenmp
-CXXFLAGS = $(CFLAGS)
-TARGETS = hw2seq hw2a hw2b
+CXX = clang++ -m64
+LDLIBS = -lpng -fopenmp -lpthread
+CXXFLAGS = -Iobjs -lm -O3 -march=native -std=c++17
 
-.PHONY: all
-all: $(TARGETS)
+APP_NAME=hw2a
+OBJDIR=objs
+
+all: hw2a hw2b
+
+hw2a:
+	clang++ -Ofast -no-pie -flto hw2a.cc objs/mandelbrot_ispc.o -Iobjs -lpng -lpthread -lm -o hw2a
+
+hw2b:
+	mpicxx -cxx=clang++ -Ofast -fsanitize=address -no-pie hw2b.cc objs/mandelbrot_ispc.o -Iobjs -lpng -lpthread -fopenmp -lm -o hw2b
 
 .PHONY: clean
 clean:
-	rm -f $(TARGETS) $(TARGETS:=.o)
+	rm -f hw2a hw2b
