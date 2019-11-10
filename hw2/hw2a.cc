@@ -1,12 +1,8 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#ifdef PERF
-//#include "timer.hpp"
-#endif
 #include "objs/mandelbrot_ispc.h"
 #include "util.h"
-#include <boost/range/irange.hpp>
 #include <iostream>
 #include <limits>
 #include <png.h>
@@ -29,10 +25,6 @@ const int tile_size(50);
 pthread_spinlock_t lock;
 
 int main(int argc, char **argv) {
-#ifdef PERF
-    Timer timer;
-    timer.start("Global");
-#endif
 
     // Get number of CPUs available
     cpu_set_t cpu_set;
@@ -61,36 +53,18 @@ int main(int argc, char **argv) {
         CPU_SET(i, &thread_cpu[i]);
         pthread_setaffinity_np(threads[i], sizeof(cpu_set_t), &thread_cpu[i]);
     }
-#ifdef PERF
-    timer.start("Computation");
-#endif
     for (int i = 0; i < num_thread; ++i) {
         pthread_join(threads[i], NULL);
     }
-#ifdef PERF
-    timer.end("Computation");
-    timer.start("Write PNG");
-#endif
     write_png(filename, iters, width, height, image);
-#ifdef PERF
-    timer.end("Write PNG");
-#endif
 
     delete[](image);
-#ifdef PERF
-    timer.end("Global");
-    timer.dump_to_stdout("Global");
-    timer.dump_to_stdout("Computation");
-    timer.dump_to_stdout("Write PNG");
-#endif
-
     return 0;
 }
 
 static void *producer(void *data) {
     int start_idx(0), end_idx(0);
     bool end_flag(false);
-
     while (1) {
         pthread_spin_lock(&lock);
         if (__builtin_expect(scheduled_idx == (image_size), false)) {
@@ -112,29 +86,6 @@ static void *producer(void *data) {
         }
         ispc::mandelbrot_ispc(left, lower, dx, dy, width, iters, start_idx,
                               end_idx, image);
-        // for (auto pixel_idx : boost::irange(start_idx, end_idx)) {
-        //     double y0((pixel_idx / width) * dy + lower),
-        //         x0((pixel_idx % width) * dx + left);
-        //     int repeats(0);
-        //     double x(0.0), y(0.0), length_squared(0.0);
-        //     // while (repeats < iters && length_squared < 4) {
-        //     //     double temp(x * x - y * y + x0);
-        //     //     y = 2 * x * y + y0;
-        //     //     x = temp;
-        //     //     length_squared = x * x + y * y;
-        //     //     ++repeats;
-        //     // }
-        //     for(repeats = 0; repeats < iters; ++repeats) {
-        //             if(length_squared > 4) {
-        //                 break;
-        //             }
-        //             double temp(x * x - y * y + x0);
-        //             y = 2 * x * y + y0;
-        //             x = temp;
-        //             length_squared = x * x + y * y;
-        //     }
-        //     image[pixel_idx] = repeats;
-        // }
         if (__builtin_expect((end_flag), false)) {
             break;
         }
