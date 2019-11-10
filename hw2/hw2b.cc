@@ -6,13 +6,8 @@
 #endif
 #include "objs/mandelbrot_ispc.h"
 #include <algorithm>
-#include <boost/range/irange.hpp>
 #include <cassert>
-#include <chrono>
-#include <complex>
 #include <iostream>
-#include <iterator>
-#include <limits>
 #include <mpi.h>
 #include <omp.h>
 #include <png.h>
@@ -70,8 +65,10 @@ int main(int argc, char **argv) {
                 MPI_Isend(&i, 1, MPI::INT, status.MPI_SOURCE, tag::DATA,
                           MPI_COMM_WORLD, &request);
                 ++active_nodes;
-                if (__builtin_expect(buffer[0] == (height - (height % tile)), false)) {
-                    std::copy_n(data_ptr, width * (height % tile), (image + buffer[0] * width));
+                if (__builtin_expect(buffer[0] == (height - (height % tile)),
+                                     false)) {
+                    std::copy_n(data_ptr, width * (height % tile),
+                                (image + buffer[0] * width));
                 } else {
                     std::copy_n(data_ptr, data_size,
                                 (image + buffer[0] * width));
@@ -85,8 +82,10 @@ int main(int argc, char **argv) {
             --active_nodes;
             MPI_Isend(&info, 1, MPI::INT, status.MPI_SOURCE, tag::TERMINATE,
                       MPI_COMM_WORLD, &request);
-            if (__builtin_expect(buffer[0] == (height - (height % tile)), true)) {
-                std::copy_n(data_ptr, width * (height % tile), (image + buffer[0] * width));
+            if (__builtin_expect(buffer[0] == (height - (height % tile)),
+                                 true)) {
+                std::copy_n(data_ptr, width * (height % tile),
+                            (image + buffer[0] * width));
             } else {
                 std::copy_n(data_ptr, data_size, (image + buffer[0] * width));
             }
@@ -106,13 +105,13 @@ int main(int argc, char **argv) {
             // int start_idx(i * width);
             // int end_idx(start_idx + data_size);
             // int buffer_idx(1);
-#pragma omp parallel for schedule(dynamic, 1)
+#pragma omp parallel for schedule(dynamic, 2)
             {
                 for (int tile_idx = 0; tile_idx < tile; ++tile_idx) {
-                    int pixel_idx((i + tile_idx) * width);
                     int start_idx(tile_idx * width + 1);
                     int end_idx(start_idx + width);
-                    ispc::mandelbrot_omp_ispc(left, lower, dx, dy, width, iters, start_idx, end_idx, pixel_idx, buffer);
+                    ispc::mandelbrot_omp_ispc(left, lower, dx, dy, width, iters,
+                                              start_idx, end_idx, i, buffer);
                     // for (int j = 0; j < width; ++j) {
                     //     y0 = ((i + tile_idx) * dy + lower);
                     //     int offset(1 + tile_idx * width + j);
@@ -130,11 +129,6 @@ int main(int argc, char **argv) {
                     // }
                 }
             }
-            std::cout << "Row: " << buffer[0] << ", ";
-            for(int i = 1; i < buffer_size; ++i) {
-                std::cout << buffer[i] << " ";
-            }
-            std::cout << std::endl;
             MPI_Send(buffer, buffer_size, MPI::INT, 0, tag::RESULT,
                      MPI_COMM_WORLD);
             MPI_Recv(&i, 1, MPI::INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
