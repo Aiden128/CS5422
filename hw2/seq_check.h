@@ -3,9 +3,10 @@
 
 #include <iostream>
 
-void seq_check(bool print,int iters, int left, int right, int lower, int upper, int width, int height, int* check_target) {
+void seq_check(bool print, int iters, int left, int right, int lower, int upper,
+               int width, int height, int *check_target) {
     /* allocate memory for image */
-    int* image = (int*)malloc(width * height * sizeof(int));
+    int *image = (int *)malloc(width * height * sizeof(int));
 
     /* mandelbrot set */
     for (int j = 0; j < height; ++j) {
@@ -28,12 +29,13 @@ void seq_check(bool print,int iters, int left, int right, int lower, int upper, 
         }
     }
     int diff_count(0);
-    for (int i = 0; i < width*height; ++i) {
-        if(image[i] != check_target[i]) {
+    for (int i = 0; i < width * height; ++i) {
+        if (image[i] != check_target[i]) {
             ++diff_count;
-            if(print == true) {
+            if (print == true) {
                 std::cout << "Ref[" << i << "]: " << image[i];
-                std::cout << " | Image[" << i << "]: " << check_target[i] << std::endl;
+                std::cout << " | Image[" << i << "]: " << check_target[i]
+                          << std::endl;
             }
         }
     }
