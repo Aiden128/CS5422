@@ -33,7 +33,7 @@ namespace ispc { /* namespace */
 extern "C" {
 #endif // __cplusplus
     extern void mandelbrot_ispc(double x0, double y0, double dx, double dy, int32_t width, int32_t maxIterations, int32_t start, int32_t end, int32_t * output);
-    extern void mandelbrot_omp_ispc(double x0, double y0, double dx, double dy, int32_t width, int32_t maxIterations, int32_t start, int32_t end, int32_t pixel_idx, int32_t * output);
+    extern void mandelbrot_omp_ispc(double x0, double y0, double dx, double dy, int32_t width, int32_t maxIterations, int32_t start, int32_t end, int32_t row_idx, int32_t * output);
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 } /* end extern C */
 #endif // __cplusplus

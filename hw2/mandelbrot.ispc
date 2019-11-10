@@ -34,14 +34,13 @@ export void mandelbrot_omp_ispc(uniform double x0, uniform double y0,
                             uniform double dx, uniform double dy,
                             uniform int width, uniform int maxIterations,
                             uniform int start, uniform int end,
-                            uniform int pixel_idx,
+                            uniform int row_idx,
                             uniform int output[])
 {
     foreach (i = start ... end) {
-
+        int pixel_idx = i + row_idx * width - 1;
         double x = (pixel_idx % width) * dx + x0;
         double y = (pixel_idx / width) * dy + y0;
-        pixel_idx++;
         output[i] = mandel(x, y, maxIterations);
     }
 }
