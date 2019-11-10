@@ -2,7 +2,7 @@
 #define _GNU_SOURCE
 #endif
 #ifdef PERF
-//#include "perf.hpp"
+#include "timer.hpp"
 #endif
 #include "objs/mandelbrot_ispc.h"
 #include <algorithm>
@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
     const double dx = static_cast<double>((right - left) / width);
     const double dy = static_cast<double>((upper - lower) / height);
     const int image_size(width * height);
-    const int tile(10);
+    const int tile(24);
     const int data_size(width * tile);
     const int buffer_size(data_size + 1);
 
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
         int active_nodes(0);
         int node_id(1);
         for (int i = 0; i < height; i += tile) {
-            if (node_id < task_num) {
+            if (__builtin_expect(node_id < task_num, false)) {
                 MPI_Isend(&i, 1, MPI::INT, node_id, tag::DATA, MPI_COMM_WORLD,
                           &request);
                 ++node_id;
@@ -64,6 +64,7 @@ int main(int argc, char **argv) {
                 --active_nodes;
                 MPI_Isend(&i, 1, MPI::INT, status.MPI_SOURCE, tag::DATA,
                           MPI_COMM_WORLD, &request);
+                MPI_Request_free(&request);
                 ++active_nodes;
                 if (__builtin_expect(buffer[0] == (height - (height % tile)),
                                      false)) {
@@ -82,6 +83,7 @@ int main(int argc, char **argv) {
             --active_nodes;
             MPI_Isend(&info, 1, MPI::INT, status.MPI_SOURCE, tag::TERMINATE,
                       MPI_COMM_WORLD, &request);
+            MPI_Request_free(&request);
             if (__builtin_expect(buffer[0] == (height - (height % tile)),
                                  true)) {
                 std::copy_n(data_ptr, width * (height % tile),
@@ -105,9 +107,12 @@ int main(int argc, char **argv) {
             // int start_idx(i * width);
             // int end_idx(start_idx + data_size);
             // int buffer_idx(1);
-#pragma omp parallel for schedule(dynamic, 2)
+#pragma omp parallel for schedule(dynamic, 1)
             {
                 for (int tile_idx = 0; tile_idx < tile; ++tile_idx) {
+                    if (__builtin_expect((tile_idx + i) > height, false)) {
+                        break;
+                    }
                     int start_idx(tile_idx * width + 1);
                     int end_idx(start_idx + width);
                     ispc::mandelbrot_omp_ispc(left, lower, dx, dy, width, iters,
