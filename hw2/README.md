@@ -38,7 +38,7 @@ I do the same job as the Pthread version, using vectorized instruction and impro
 
 #### System Spec
 
-The testing environment is Apollo cluster, provided by TA.
+For normal tests, the testing environment is Apollo cluster, provided by TA.
 
 #### Software Spec
 
@@ -63,7 +63,7 @@ Test parameter
 
 #### Pthread
 
-![Homework 2a scalability (README.assets/Homework 2a scalability (SIMD disabled).png)](../../../Downloads/Homework 2a scalability (SIMD disabled).png)
+![Homework 2a scalability (SIMD disabled)](README.assets/Homework 2a scalability (SIMD disabled).png)
 
 | Thread num | Speed up |
 | ---------- | -------- |
@@ -80,7 +80,7 @@ Test parameter
 | 11         | 8.9x     |
 | 12         | 9.5x      |
 
-![Homework 2a scalability (README.assets/Homework 2a scalability (SIMD enabled)-3399877.png)](../../../Downloads/Homework 2a scalability (SIMD enabled).png)
+![Homework 2a scalability (SIMD enabled)](README.assets/Homework 2a scalability (SIMD enabled).png)
 
 | Thread num | Speed up |
 | ---------- | -------- |
@@ -115,7 +115,9 @@ However, in hybrid version, the variance among all ranks is 0.489, which is rath
 
 ![Comparison of Pthread & Hybrid](README.assets/Comparison of Pthread & Hybrid.png)
 
-In modern multi-core era, MPI can't achieve good scalability when CPU thread is becoming more and more. Many library tends to optimize for multi-core scenario, therefore, I think MPI is becoming less important nowadays.
+In modern multi-core era, MPI can't achieve good scalability when CPU thread is growing up. Many library tends to optimize for multi-core scenario, therefore, I think MPI is becoming less important nowadays.
+
+BTW, I think the use of vectorized instruction should be automatic, writing intel intrinsics is like writing assembly codes, which has poor portability and readability. I think the right way to do this is using compiler tools to help us.
 
 ## Reference
 
