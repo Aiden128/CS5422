@@ -9,10 +9,10 @@ OBJDIR=objs
 all: hw2a hw2b
 
 hw2a:
-	clang++ -Ofast -no-pie -flto hw2a.cc objs/mandelbrot_ispc.o -Iobjs -lpng -lpthread -lm -o hw2a
+	clang++ -Ofast -no-pie -std=c++17 hw2a.cc objs/mandelbrot_ispc.o -Iobjs -lpng -lpthread -lm -o hw2a
 
 hw2b:
-	mpicxx -cxx=clang++ -Ofast -fsanitize=address -no-pie hw2b.cc objs/mandelbrot_ispc.o -Iobjs -lpng -lpthread -fopenmp -lm -o hw2b
+	mpicxx -cxx=clang++ -Ofast -no-pie -std=c++17 hw2b.cc objs/mandelbrot_ispc.o -Iobjs -lpng -lpthread -fopenmp -lm -o hw2b
 
 .PHONY: clean
 clean:
