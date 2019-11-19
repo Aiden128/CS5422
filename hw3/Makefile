@@ -1,6 +1,6 @@
 CC = clang
 CXX = clang++
-CXXFLAGS = -Ofast -pthread -ltbb -flto
+CXXFLAGS = -Ofast -pthread -ltbb -flto -fopenmp
 CFLAGS = -Ofast -lm -pthread
 TARGETS = hw3
 
