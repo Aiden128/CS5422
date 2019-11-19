@@ -13,7 +13,7 @@ const int32_t Out_max = 1073741823;
 class APSP{
 private:
     int32_t num_vertex;
-    std::vector< std::vector<int32_t> > AdjMatrix, Distance, Predecessor;
+    std::vector< std::vector<int32_t> > AdjMatrix;
 public:
     APSP():num_vertex(0){};
     APSP(int32_t n);
@@ -37,48 +37,20 @@ APSP::APSP(int32_t n):num_vertex(n){
     }
 }
 
-void APSP::InitializeData(){
-
-    Distance.resize(num_vertex);
-    Predecessor.resize(num_vertex);
-
-    for (int32_t i = 0; i < num_vertex; i++) {
-        Distance[i].resize(num_vertex);
-        Predecessor[i].resize(num_vertex, -1);
-        for (int32_t j = 0; j < num_vertex; j++) {
-            Distance[i][j] = AdjMatrix[i][j];
-            if (Distance[i][j] != 0 && Distance[i][j] != MaxDistance) {
-                Predecessor[i][j] = i;
-            }
-        }
-    }
-}
 void APSP::FloydWarshall(){
-
-    InitializeData();
-
-    // std::cout << "initial Distance[]:\n";
-    // PrintData(Distance);
-    // std::cout << "\ninitial Predecessor[]:\n";
-    // PrintData(Predecessor);
 
     for (int32_t k = 0; k < num_vertex; k++) {
         for (int32_t i = 0; i < num_vertex; i++) {
             for (int32_t j = 0; j < num_vertex; j++) {
-                if ((Distance[i][j] > Distance[i][k]+Distance[k][j]) 
-                     && (Distance[i][k] != MaxDistance)) {
-                    Distance[i][j] = Distance[i][k]+Distance[k][j];
-                    Predecessor[i][j] = Predecessor[k][j];
+                if ((AdjMatrix[i][j] > AdjMatrix[i][k]+AdjMatrix[k][j]) 
+                     && (AdjMatrix[i][k] != MaxDistance)) {
+                    AdjMatrix[i][j] = AdjMatrix[i][k]+AdjMatrix[k][j];
                 }
             }
         }
     }
-    // print data after including new vertex and updating the shortest paths
-    // std::cout << "Distance[]:\n";
-    // PrintData(Distance);
-    // std::cout << "\nPredecessor[]:\n";
-    // PrintData(Predecessor);
 }
+
 void APSP::PrintData(std::vector< std::vector<int32_t> > array){
 
     for (int32_t i = 0; i < num_vertex; i++){
@@ -93,17 +65,16 @@ inline void APSP::AddEdge(int32_t from, int32_t to, int32_t weight){
     AdjMatrix[from][to] = weight;
 }
 
-
 void APSP::Write_file(const char *filename) {
     ofstream out_file(filename);
     for (int32_t i = 0; i < num_vertex; i++){
         for (int32_t j = 0; j < num_vertex; j++) {
-            if(Distance[i][j] == INT16_MAX) {
+            if(AdjMatrix[i][j] == INT16_MAX) {
                 // Write 2^30 -1
                 out_file.write((char*) &Out_max, sizeof(Out_max));
             } else {
                 // Write normal
-                out_file.write((char*) &Distance[i][j], sizeof(int32_t));
+                out_file.write((char*) &AdjMatrix[i][j], sizeof(int32_t));
             }
         }
     }
@@ -127,22 +98,7 @@ int main(int argc, char **argv){
         apsp.AddEdge(src, dest, weight);
     }
     file.close();
-    
-    // Check output
-    // std::ifstream result(argv[2]);
-    // vector<int> ref;
-    // result.seekg(0, std::ios_base::beg);
-    // int temp(0);
-    // cout << "Reference: " << endl;
-    // for(int i =0; i < (num_vertex * num_vertex); ++i) {
-    //     result.read((char*)&temp, sizeof(temp));
-    //     cout << temp << " ";
-    //     if((i % num_vertex) == (num_vertex - 1)) {
-    //         cout << endl;
-    //     }
-    //     ref.push_back(temp);
-    // }
-    // result.close();
+
     apsp.FloydWarshall();
     apsp.Write_file(argv[2]);
     return 0;
