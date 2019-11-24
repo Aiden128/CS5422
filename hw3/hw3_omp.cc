@@ -6,37 +6,50 @@
 #include <vector>
 #include <omp.h>
 
-const int32_t MaxDistance = INT16_MAX;
-const int32_t Out_max = 1073741823;
+const int32_t INF = 1073741823;
 
 class APSP {
-  private:
-    int32_t num_vertex;
-
-  public:
-    std::vector<std::vector<int32_t>> AdjMatrix;
-    APSP() : num_vertex(0){};
-    APSP(int32_t n);
-    inline void AddEdge(int32_t from, int32_t to, int32_t weight);
-    void PrintData(std::vector<std::vector<int32_t>> array);
+public:
+    explicit APSP(const char *filename);
     void Write_file(const char *filename);
     void FloydWarshall();
     void Parallel_FloydWarshall();
     void OMP_FloydWarshall();
+
+  private:
+    inline void AddEdge(const int32_t &from, const int32_t &to, const int32_t &weight);
+    int32_t num_vertex;
+    int32_t num_edge;
+    int32_t thread_count;
+    std::vector<std::vector<int32_t>> AdjMatrix;
 };
 
-APSP::APSP(int32_t n) : num_vertex(n) {
-    // Constructor, initialize AdjMatrix with 0 or MaxDistance
+APSP::APSP(const char *filename) {
+    thread_count = omp_get_max_threads();
+    
+    std::ifstream file(filename);
+    int32_t src(0), dest(0), weight(0);
+    file.read((char *)&num_vertex, sizeof(num_vertex));
+    file.read((char *)&num_edge, sizeof(num_edge));
+
+    int *tmp(new int[num_edge * 3]);
+    file.read((char*)tmp, sizeof(int) * num_edge * 3);
+
     AdjMatrix.resize(num_vertex);
-//#pragma omp parallel for 
-    for (int32_t i = 0; i < num_vertex; i++) {
-        AdjMatrix[i].resize(num_vertex, MaxDistance);
-        for (int32_t j = 0; j < num_vertex; j++) {
-            if (i == j) {
-                AdjMatrix[i][j] = 0;
-            }
-        }
+#pragma omp parallel for num_threads(2) schedule(dynamic)
+    for (int32_t i = 0; i < num_vertex; ++i) {
+        AdjMatrix[i].resize(num_vertex, INF);
+        AdjMatrix[i][i] = 0;
     }
+
+    for (int32_t i = 0; i < num_edge; ++i) {
+        src = tmp[i*3];
+        dest = tmp[i*3+1];
+        weight = tmp[i*3+2];
+        AddEdge(src, dest, weight);
+    }
+    file.close();
+    delete[](tmp);
 }
 
 void APSP::FloydWarshall() {
@@ -64,21 +77,15 @@ void APSP::Parallel_FloydWarshall() {
 }
 
 void APSP::OMP_FloydWarshall() {
-    int thread_count(omp_get_num_threads());
     int grain(num_vertex / thread_count);
-    if (grain == 0){ 
-        grain = 1;
-        thread_count = 1;
-    }
-
     for (int k = 0; k < num_vertex; k++) {
 #pragma omp parallel num_threads(thread_count) 
 {
         int tid = omp_get_thread_num();
         int start = grain * tid;
         int end = tid == thread_count - 1 ? num_vertex : grain * (tid + 1);
-        for (int i = start; i < end; i++) {
-            for (int j = 0; j < num_vertex; j++) {
+        for (int i = start; i < end; ++i) {
+            for (int j = 0; j < num_vertex; ++j) {
                 AdjMatrix[i][j] = std::min(AdjMatrix[i][j], (AdjMatrix[i][k] + AdjMatrix[k][j]));
             }
         }
@@ -86,56 +93,22 @@ void APSP::OMP_FloydWarshall() {
     }
 }
 
-void APSP::PrintData(std::vector<std::vector<int32_t>> array) {
-    for (int32_t i = 0; i < num_vertex; i++) {
-        for (int32_t j = 0; j < num_vertex; j++) {
-            std::cout << std::setw(5) << array[i][j];
-        }
-        std::cout << std::endl;
-    }
-}
-
-inline void APSP::AddEdge(int32_t from, int32_t to, int32_t weight) {
+inline void APSP::AddEdge(const int32_t &from, const int32_t &to, const int32_t &weight) {
     AdjMatrix[from][to] = weight;
 }
 
 void APSP::Write_file(const char *filename) {
     std::ofstream out_file(filename);
-    for (int32_t i = 0; i < num_vertex; i++) {
-        for (int32_t j = 0; j < num_vertex; j++) {
-            if (AdjMatrix[i][j] == INT16_MAX) {
-                // Write 2^30 -1
-                out_file.write((char *)&Out_max, sizeof(Out_max));
-            } else {
-                // Write normal
-                out_file.write((char *)&AdjMatrix[i][j], sizeof(int32_t));
-            }
-        }
+    for (int32_t i = 0; i < num_vertex; ++i) {
+        out_file.write((char*) &AdjMatrix[i][0], sizeof(int) * num_vertex);
     }
     out_file.close();
 }
 
 int main(int argc, char **argv) {
+    APSP apsp(argv[1]);
 
-    std::ifstream file(argv[1]);
-    int32_t num_vertex(0), num_edge(0);
-    int32_t src(0), dest(0), weight(0);
-
-    file.seekg(0, std::ios_base::beg);
-    file.read((char *)&num_vertex, sizeof(num_vertex));
-    APSP apsp(num_vertex);
-    file.read((char *)&num_edge, sizeof(num_edge));
-    for (int32_t i = 0; i < num_edge; ++i) {
-        file.read((char *)&src, sizeof(src));
-        file.read((char *)&dest, sizeof(dest));
-        file.read((char *)&weight, sizeof(weight));
-        apsp.AddEdge(src, dest, weight);
-    }
-    file.close();
-
-    //apsp.FloydWarshall();
     apsp.OMP_FloydWarshall();
-    apsp.PrintData(apsp.AdjMatrix);
     apsp.Write_file(argv[2]);
     return 0;
 }
