@@ -1,5 +1,5 @@
 NVCC         = nvcc 
-NVCCFLAGS    = -O3 -std=c++11 -Xptxas=-v -arch=sm_61
+NVCCFLAGS    = -O3 -std=c++11 -Xptxas=-v -arch=sm_61 --default-stream per-thread --use_fast_math
 NVCCLDFLAGS  = -L/home/pp19/share/lib -Xlinker=-rpath,/home/pp19/share/lib -llab5
 
 TARGETS = sobel.cuda
