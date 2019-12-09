@@ -335,6 +335,14 @@ void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology>& dataHost) {
 //     out_file.close();
 // }
 
+void Write_file(const std::string &filename, const std::unique_ptr<graphAPSPTopology> &data) {
+    std::ofstream out_file(filename);
+    for (int i = 0; i < data->nvertex; ++i) {
+        out_file.write((char *)&data->graph[i * data->nvertex], sizeof(int) * data->nvertex);
+    }
+    out_file.close();
+}
+
 int main (int argc, char **argv) {
     std::fstream file;
     int num_vertex = 0;
@@ -347,11 +355,12 @@ int main (int argc, char **argv) {
     file.open(in_filename, std::ios::in | std::ios::binary);
     file.read((char *)&num_vertex, sizeof(num_vertex));
     file.read((char *)&num_edge, sizeof(num_edge));
-    graphAPSPTopology AdjMatrix(num_vertex);
+    std::unique_ptr<graphAPSPTopology> AdjMatrix;
+    AdjMatrix = std::unique_ptr<graphAPSPTopology>(new graphAPSPTopology(num_vertex));
 
-    std::fill_n(AdjMatrix.graph.get(), num_vertex * num_vertex, INF);  
+    std::fill_n(AdjMatrix->graph.get(), num_vertex * num_vertex, INF);  
     for (int i = 0; i < num_vertex; i++) {
-        AdjMatrix.graph[i * num_vertex + i] = 0;
+        AdjMatrix->graph[i * num_vertex + i] = 0;
     }
 
     int *tmp(new int[num_edge * 3]);
@@ -361,7 +370,7 @@ int main (int argc, char **argv) {
         dest = tmp[i * 3 + 1];
         weight = tmp[i * 3 + 2];
         int idx(src * num_vertex + dest);
-        AdjMatrix.graph[idx] = weight;
+        AdjMatrix->graph[idx] = weight;
     }
     file.close();
 
