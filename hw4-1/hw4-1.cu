@@ -87,18 +87,17 @@ void _blocked_fw_dependent_ph(const int blockId, size_t pitch, const int nvertex
 static __global__
 void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int nvertex, int* const graph) {
     if (blockIdx.x == blockId) return;
-
-    const int idx = threadIdx.x;
-    const int idy = threadIdx.y;
-
-    int v1 = BLOCK_SIZE * blockId + idy;
-    int v2 = BLOCK_SIZE * blockId + idx;
-
+    const int idx(threadIdx.x);
+    const int idy(threadIdx.y);
+    int v1(BLOCK_SIZE * blockId + idy);
+    int v2(BLOCK_SIZE * blockId + idx);
     __shared__ int cacheGraphBase[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ int cacheGraph[BLOCK_SIZE][BLOCK_SIZE];
+    int currentPath(0);
+    int cellId(v1 * pitch + v2);
+    int newPath(0);
 
     // Load base block for graph and predecessors
-    int cellId = v1 * pitch + v2;
-
     if (v1 < nvertex && v2 < nvertex) {
         cacheGraphBase[idy][idx] = graph[cellId];
     } else {
@@ -109,15 +108,11 @@ void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int
     if (blockIdx.y == 0) {
         v2 = BLOCK_SIZE * blockIdx.x + idx;
     } else {
-   // Load j-aligned singly dependent blocks
+    // Load j-aligned singly dependent blocks
         v1 = BLOCK_SIZE * blockIdx.x + idy;
     }
 
-    __shared__ int cacheGraph[BLOCK_SIZE][BLOCK_SIZE];
-
     // Load current block for graph and predecessors
-    int currentPath;
-
     cellId = v1 * pitch + v2;
     if (v1 < nvertex && v2 < nvertex) {
         currentPath = graph[cellId];
@@ -125,27 +120,24 @@ void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int
         currentPath = INF;
     }
     cacheGraph[idy][idx] = currentPath;
-
     // Synchronize to make sure the all value are saved in cache
     __syncthreads();
 
-    int newPath;
+    if (v1 > nvertex || v2 > nvertex) {
+        return;
+    }
+
     // Compute i-aligned singly dependent blocks
     if (blockIdx.y == 0) {
         #pragma unroll
         for (int u = 0; u < BLOCK_SIZE; ++u) {
             newPath = cacheGraphBase[idy][u] + cacheGraph[u][idx];
-
             if (newPath < currentPath) {
                 currentPath = newPath;
             }
-            // Synchronize to make sure that all threads compare new value with old
-            __syncthreads();
-
-           // Update new values
+            // Update new values
             cacheGraph[idy][idx] = currentPath;
-
-           // Synchronize to make sure that all threads update cache
+            // Synchronize to make sure that all threads update cache
             __syncthreads();
         }
     } else {
@@ -153,25 +145,16 @@ void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int
         #pragma unroll
         for (int u = 0; u < BLOCK_SIZE; ++u) {
             newPath = cacheGraph[idy][u] + cacheGraphBase[u][idx];
-
             if (newPath < currentPath) {
                 currentPath = newPath;
             }
-
-            // Synchronize to make sure that all threads compare new value with old
-            __syncthreads();
-
-           // Update new values
+            // Update new values
             cacheGraph[idy][idx] = currentPath;
-
-           // Synchronize to make sure that all threads update cache
+            // Synchronize to make sure that all threads update cache
             __syncthreads();
         }
     }
-
-    if (v1 < nvertex && v2 < nvertex) {
-        graph[cellId] = currentPath;
-    }
+    graph[cellId] = currentPath;
 }
 
 /**
