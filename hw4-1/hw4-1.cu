@@ -21,19 +21,6 @@ struct graphAPSPTopology {
 };
 
 /**
- * CUDA handle error, if error occurs print message and exit program
-*
-* @param error: CUDA error status
-*/
-#define HANDLE_ERROR(error) { \
-    if (error != cudaSuccess) { \
-        fprintf(stderr, "%s in %s at line %d\n", \
-                cudaGetErrorString(error), __FILE__, __LINE__); \
-        exit(EXIT_FAILURE); \
-    } \
-} \
-
-/**
  * Blocked CUDA kernel implementation algorithm Floyd Wharshall for APSP
  * Dependent phase 1
  *
@@ -169,21 +156,19 @@ void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int
 static __global__
 void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvertex, int* const graph) {
     if (blockIdx.x == blockId || blockIdx.y == blockId) return;
-
-    const int idx = threadIdx.x;
-    const int idy = threadIdx.y;
-
-    const int v1 = blockDim.y * blockIdx.y + idy;
-    const int v2 = blockDim.x * blockIdx.x + idx;
-
+    const int idx(threadIdx.x);
+    const int idy(threadIdx.y);
+    const int v1(blockDim.y * blockIdx.y + idy);
+    const int v2(blockDim.x * blockIdx.x + idx);
     __shared__ int cacheGraphBaseRow[BLOCK_SIZE][BLOCK_SIZE];
     __shared__ int cacheGraphBaseCol[BLOCK_SIZE][BLOCK_SIZE];
-
-    int v1Row = BLOCK_SIZE * blockId + idy;
-    int v2Col = BLOCK_SIZE * blockId + idx;
+    int v1Row(BLOCK_SIZE * blockId + idy);
+    int v2Col(BLOCK_SIZE * blockId + idx);
+    int cellId(0);
+    int currentPath(0);
+    int newPath(0);
 
     // Load data for block
-    int cellId(0);
     if (v1Row < nvertex && v2 < nvertex) {
         cellId = v1Row * pitch + v2;
         cacheGraphBaseRow[idy][idx] = graph[cellId];
@@ -191,7 +176,6 @@ void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvert
     else {
         cacheGraphBaseRow[idy][idx] = INF;
     }
-
     if (v1  < nvertex && v2Col < nvertex) {
         cellId = v1 * pitch + v2Col;
         cacheGraphBaseCol[idy][idx] = graph[cellId];
@@ -199,15 +183,15 @@ void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvert
     else {
         cacheGraphBaseCol[idy][idx] = INF;
     }
-
     // Synchronize to make sure the all value are loaded in virtual block
-   __syncthreads();
+    __syncthreads();
 
-   int currentPath;
-   int newPath;
+    if (v1 > nvertex || v2 > nvertex) {
+        return;
+    }
 
-   // Compute data for block
-   if (v1  < nvertex && v2 < nvertex) {
+    // Compute data for block
+    if (v1  < nvertex && v2 < nvertex) {
        cellId = v1 * pitch + v2;
        currentPath = graph[cellId];
 
@@ -236,12 +220,9 @@ size_t _cudaMoveMemoryToDevice(const std::unique_ptr<graphAPSPTopology>& dataHos
     size_t pitch;
 
     // Allocate GPU buffers for matrix of shortest paths d(G) and predecessors p(G)
-    // HANDLE_ERROR(cudaMallocPitch(graphDevice, &pitch, width, height));
     cudaMallocPitch(graphDevice, &pitch, width, height);
 
     // Copy input from host memory to GPU buffers and
-    // HANDLE_ERROR(cudaMemcpy2D(*graphDevice, pitch,
-            // dataHost->graph.get(), width, width, height, cudaMemcpyHostToDevice));
     cudaMemcpy2D(*graphDevice, pitch, dataHost->graph.get(), width, width, height, cudaMemcpyHostToDevice);
 
     return pitch;
@@ -259,9 +240,7 @@ void _cudaMoveMemoryToHost(int *graphDevice, const std::unique_ptr<graphAPSPTopo
     size_t height = dataHost->nvertex;
     size_t width = height * sizeof(int);
 
-    // HANDLE_ERROR(cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width, height, cudaMemcpyDeviceToHost));
     cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width, height, cudaMemcpyDeviceToHost);
-    // HANDLE_ERROR(cudaFree(graphDevice));
     cudaFree(graphDevice);
 }
 
@@ -280,7 +259,6 @@ void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology>& dataHost) {
     dim3 gridPhase2((nvertex - 1) / BLOCK_SIZE + 1, 2 , 1);
     dim3 gridPhase3((nvertex - 1) / BLOCK_SIZE + 1, (nvertex - 1) / BLOCK_SIZE + 1 , 1);
     dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE, 1);
-
     int numBlock = (nvertex - 1) / BLOCK_SIZE + 1;
 
     for(int blockID = 0; blockID < numBlock; ++blockID) {
@@ -297,9 +275,6 @@ void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology>& dataHost) {
                 (blockID, pitch / sizeof(int), nvertex, graphDevice);
     }
 
-    // Check for any errors launching the kernel
-    //HANDLE_ERROR(cudaGetLastError());
-    //HANDLE_ERROR(cudaDeviceSynchronize());
     _cudaMoveMemoryToHost(graphDevice, dataHost, pitch);
 }
 
@@ -375,6 +350,7 @@ int main (int argc, char **argv) {
     file.close();
     cudaBlockedFW(AdjMatrix);
     Write_file(out_filename, AdjMatrix);
+    delete[] (tmp);
 
     return 0;
 }
