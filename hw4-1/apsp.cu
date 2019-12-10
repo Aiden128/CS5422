@@ -382,13 +382,13 @@ int main (int argc, char **argv) {
     int src = 0;
     int dest = 0;
     int weight = 0;
-    std::string in_filename = argv[1];
+    std::string in_filename(argv[1]);
+    std::string out_filename(argv[2]);
 
     file.open(in_filename, std::ios::in | std::ios::binary);
     file.read((char *)&num_vertex, sizeof(num_vertex));
     file.read((char *)&num_edge, sizeof(num_edge));
-    std::unique_ptr<graphAPSPTopology> AdjMatrix;
-    AdjMatrix = std::unique_ptr<graphAPSPTopology>(new graphAPSPTopology(num_vertex));
+    std::unique_ptr<graphAPSPTopology> AdjMatrix(new graphAPSPTopology(num_vertex));
 
     std::fill_n(AdjMatrix->graph.get(), num_vertex * num_vertex, INF);  
     for (int i = 0; i < num_vertex; i++) {
@@ -405,9 +405,8 @@ int main (int argc, char **argv) {
         AdjMatrix->graph[idx] = weight;
     }
     file.close();
-    printData(AdjMatrix, INF);
     cudaBlockedFW(AdjMatrix);
-    printData(AdjMatrix, INF);
+    Write_file(out_filename, AdjMatrix);
 
     return 0;
 }

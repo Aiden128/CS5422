@@ -10,5 +10,5 @@ clean:
 seq: seq.cc
 	g++ $(CXXFLAGS) -o $@ $?
 
-apsp: apsp.cu
+hw4-1: apsp.cu
 	nvcc $(NVFLAGS) $(LDFLAGS) -o $@ $?
