@@ -4,7 +4,7 @@
 #include <memory>
 #include <fstream>
 #include <string>
-
+#include <iostream>
 const int BLOCK_SIZE = 16;
 const int INF = 1073741823;
 
@@ -335,6 +335,38 @@ void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology>& dataHost) {
 //     out_file.close();
 // }
 
+/**
+ * Print data graph (graph matrix, prep) and time
+ *
+ * @param graph: pointer to graph data
+ * @param max: maximum value in graph path
+ */
+ void printData(const std::unique_ptr<graphAPSPTopology>& graph, int maxValue) {
+    // Lambda function for printMatrix -1 means no path
+    std::ios::sync_with_stdio(false);
+    auto printMatrix = [](std::unique_ptr<int []>& graph, int n, int max) {
+        std::cout << "[";
+        for (int i = 0; i < n; ++i) {
+            std::cout << "[";
+            for (int j = 0; j < n; ++j) {
+                if (max > graph[i * n + j])
+                    std::cout << graph[i * n + j];
+                else
+                    std::cout << -1 ;
+                if (j != n - 1) std::cout << ",";
+            }
+            if (i != n - 1)
+                std::cout << "],\n";
+            else
+                std::cout << "]";
+        }
+        std::cout << "],\n";
+    };
+
+    std::cout << "{\n    \"graph\":\n";
+    printMatrix(graph->graph, graph->nvertex, maxValue);
+}
+
 void Write_file(const std::string &filename, const std::unique_ptr<graphAPSPTopology> &data) {
     std::ofstream out_file(filename);
     for (int i = 0; i < data->nvertex; ++i) {
@@ -373,6 +405,9 @@ int main (int argc, char **argv) {
         AdjMatrix->graph[idx] = weight;
     }
     file.close();
+    printData(AdjMatrix, INF);
+    cudaBlockedFW(AdjMatrix);
+    printData(AdjMatrix, INF);
 
     return 0;
 }
