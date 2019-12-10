@@ -5,7 +5,7 @@
 #include <fstream>
 #include <string>
 #include <iostream>
-const int BLOCK_SIZE = 16;
+const int BLOCK_SIZE = 32;
 const int INF = 1073741823;
 
 /* Default structure for graph */
@@ -262,11 +262,13 @@ size_t _cudaMoveMemoryToDevice(const std::unique_ptr<graphAPSPTopology>& dataHos
     size_t pitch;
 
     // Allocate GPU buffers for matrix of shortest paths d(G) and predecessors p(G)
-    HANDLE_ERROR(cudaMallocPitch(graphDevice, &pitch, width, height));
+    // HANDLE_ERROR(cudaMallocPitch(graphDevice, &pitch, width, height));
+    cudaMallocPitch(graphDevice, &pitch, width, height);
 
     // Copy input from host memory to GPU buffers and
-    HANDLE_ERROR(cudaMemcpy2D(*graphDevice, pitch,
-            dataHost->graph.get(), width, width, height, cudaMemcpyHostToDevice));
+    // HANDLE_ERROR(cudaMemcpy2D(*graphDevice, pitch,
+            // dataHost->graph.get(), width, width, height, cudaMemcpyHostToDevice));
+    cudaMemcpy2D(*graphDevice, pitch, dataHost->graph.get(), width, width, height, cudaMemcpyHostToDevice);
 
     return pitch;
 }
@@ -283,9 +285,10 @@ void _cudaMoveMemoryToHost(int *graphDevice, const std::unique_ptr<graphAPSPTopo
     size_t height = dataHost->nvertex;
     size_t width = height * sizeof(int);
 
-    HANDLE_ERROR(cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width, height, cudaMemcpyDeviceToHost));
-
-    HANDLE_ERROR(cudaFree(graphDevice));
+    // HANDLE_ERROR(cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width, height, cudaMemcpyDeviceToHost));
+    cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width, height, cudaMemcpyDeviceToHost);
+    // HANDLE_ERROR(cudaFree(graphDevice));
+    cudaFree(graphDevice);
 }
 
 /**
@@ -294,9 +297,9 @@ void _cudaMoveMemoryToHost(int *graphDevice, const std::unique_ptr<graphAPSPTopo
  * @param data: unique ptr to graph data with allocated fields on host
  */
 void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology>& dataHost) {
-    HANDLE_ERROR(cudaSetDevice(0));
-    int nvertex = dataHost->nvertex;
-    int *graphDevice;
+    // HANDLE_ERROR(cudaSetDevice(0));
+    int nvertex(dataHost->nvertex);
+    int *graphDevice(NULL);
     size_t pitch = _cudaMoveMemoryToDevice(dataHost, &graphDevice);
 
     dim3 gridPhase1(1 ,1, 1);
@@ -321,19 +324,10 @@ void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology>& dataHost) {
     }
 
     // Check for any errors launching the kernel
-    HANDLE_ERROR(cudaGetLastError());
-    HANDLE_ERROR(cudaDeviceSynchronize());
+    //HANDLE_ERROR(cudaGetLastError());
+    //HANDLE_ERROR(cudaDeviceSynchronize());
     _cudaMoveMemoryToHost(graphDevice, dataHost, pitch);
 }
-
-// void Write_file(const char *filename, int *AdjMatrix, const int &num_vertex) {
-//     std::ofstream out_file(filename);
-//     for (int i = 0; i < num_vertex; i++) {
-//         out_file.write((char *)&AdjMatrix[i * num_vertex],
-//                        sizeof(int) * num_vertex);
-//     }
-//     out_file.close();
-// }
 
 /**
  * Print data graph (graph matrix, prep) and time
