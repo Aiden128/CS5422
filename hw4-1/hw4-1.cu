@@ -45,22 +45,18 @@ struct graphAPSPTopology {
 static __global__
 void _blocked_fw_dependent_ph(const int blockId, size_t pitch, const int nvertex, int* const graph) {
     __shared__ int cacheGraph[BLOCK_SIZE][BLOCK_SIZE];
+    const int idx(threadIdx.x);
+    const int idy(threadIdx.y);
+    const int v1(BLOCK_SIZE * blockId + idy);
+    const int v2(BLOCK_SIZE * blockId + idx);
+    int newPath(0);
+    const int cellId(v1 * pitch + v2);
 
-    const int idx = threadIdx.x;
-    const int idy = threadIdx.y;
-
-    const int v1 = BLOCK_SIZE * blockId + idy;
-    const int v2 = BLOCK_SIZE * blockId + idx;
-
-    int newPath;
-
-    const int cellId = v1 * pitch + v2;
     if (v1 < nvertex && v2 < nvertex) {
         cacheGraph[idy][idx] = graph[cellId];
     } else {
         cacheGraph[idy][idx] = INF;
     }
-
     // Synchronize to make sure the all value are loaded in block
     __syncthreads();
 
@@ -208,10 +204,9 @@ void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvert
     int v2Col = BLOCK_SIZE * blockId + idx;
 
     // Load data for block
-    int cellId;
+    int cellId(0);
     if (v1Row < nvertex && v2 < nvertex) {
         cellId = v1Row * pitch + v2;
-
         cacheGraphBaseRow[idy][idx] = graph[cellId];
     }
     else {
