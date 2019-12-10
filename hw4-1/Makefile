@@ -1,4 +1,4 @@
-NVFLAGS  := -std=c++11 -O3 -Xptxas="-v" -arch=sm_61 
+NVFLAGS  := -std=c++11 -use_fast_math -O3 -Xptxas="-v" -arch=sm_61 
 LDFLAGS  := -lm
 EXES     := seq hw4-1
 
