@@ -59,24 +59,20 @@ void _blocked_fw_dependent_ph(const int blockId, size_t pitch, const int nvertex
     }
     // Synchronize to make sure the all value are loaded in block
     __syncthreads();
+    if (v1 > nvertex || v2 > nvertex) {
+        return;
+    }
 
     #pragma unroll
     for (int u = 0; u < BLOCK_SIZE; ++u) {
         newPath = cacheGraph[idy][u] + cacheGraph[u][idx];
-
-        // Synchronize before calculate new value
-        __syncthreads();
         if (newPath < cacheGraph[idy][idx]) {
             cacheGraph[idy][idx] = newPath;
         }
-
         // Synchronize to make sure that all value are current
         __syncthreads();
     }
-
-    if (v1 < nvertex && v2 < nvertex) {
-        graph[cellId] = cacheGraph[idy][idx];
-    }
+    graph[cellId] = cacheGraph[idy][idx];
 }
 
 /**
