@@ -191,19 +191,16 @@ void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvert
     }
 
     // Compute data for block
-    if (v1  < nvertex && v2 < nvertex) {
-       cellId = v1 * pitch + v2;
-       currentPath = graph[cellId];
-
-        #pragma unroll
-        for (int u = 0; u < BLOCK_SIZE; ++u) {
-           newPath = cacheGraphBaseCol[idy][u] + cacheGraphBaseRow[u][idx];
-           if (currentPath > newPath) {
-               currentPath = newPath;
-           }
+    cellId = v1 * pitch + v2;
+    currentPath = graph[cellId];
+    // #pragma unroll
+    for (int u = 0; u < BLOCK_SIZE; ++u) {
+       newPath = cacheGraphBaseCol[idy][u] + cacheGraphBaseRow[u][idx];
+       if (currentPath > newPath) {
+           currentPath = newPath;
        }
-       graph[cellId] = currentPath;
-   }
+    }
+    graph[cellId] = currentPath;
 }
 
 /**
@@ -214,7 +211,7 @@ void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvert
  * @return: Pitch for allocation
  */
 static
-size_t _cudaMoveMemoryToDevice(const std::unique_ptr<graphAPSPTopology>& dataHost, int **graphDevice) {
+size_t _cudaMoveMemoryToDevice(const std::unique_ptr<graphAPSPTopology> &dataHost, int **graphDevice) {
     size_t height = dataHost->nvertex;
     size_t width = height * sizeof(int);
     size_t pitch;
@@ -236,7 +233,7 @@ size_t _cudaMoveMemoryToDevice(const std::unique_ptr<graphAPSPTopology>& dataHos
  * @param pitch: Pitch for allocation
  */
 static
-void _cudaMoveMemoryToHost(int *graphDevice, const std::unique_ptr<graphAPSPTopology>& dataHost, size_t pitch) {
+void _cudaMoveMemoryToHost(int *graphDevice, const std::unique_ptr<graphAPSPTopology> &dataHost, size_t pitch) {
     size_t height = dataHost->nvertex;
     size_t width = height * sizeof(int);
 
@@ -249,15 +246,15 @@ void _cudaMoveMemoryToHost(int *graphDevice, const std::unique_ptr<graphAPSPTopo
  *
  * @param data: unique ptr to graph data with allocated fields on host
  */
-void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology>& dataHost) {
-    // HANDLE_ERROR(cudaSetDevice(0));
+void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology> &dataHost) {
     int nvertex(dataHost->nvertex);
     int *graphDevice(NULL);
     size_t pitch = _cudaMoveMemoryToDevice(dataHost, &graphDevice);
 
+    const int tile_size(std::ceil((float) nvertex / BLOCK_SIZE));
     dim3 gridPhase1(1 ,1, 1);
-    dim3 gridPhase2((nvertex - 1) / BLOCK_SIZE + 1, 2 , 1);
-    dim3 gridPhase3((nvertex - 1) / BLOCK_SIZE + 1, (nvertex - 1) / BLOCK_SIZE + 1 , 1);
+    dim3 gridPhase2(tile_size, 2);
+    dim3 gridPhase3(tile_size, tile_size);
     dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE, 1);
     int numBlock = (nvertex - 1) / BLOCK_SIZE + 1;
 
