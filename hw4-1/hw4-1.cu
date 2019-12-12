@@ -10,11 +10,11 @@ const int INF = 1073741823;
 
 /* Default structure for graph */
 struct graphAPSPTopology {
-    unsigned int nvertex; // number of vertex in graph
+    unsigned int nvertex;         // number of vertex in graph
     std::unique_ptr<int[]> graph; // graph matrix
 
     /* Constructor for init fields */
-    graphAPSPTopology(int nvertex): nvertex(nvertex) {
+    graphAPSPTopology(int nvertex) : nvertex(nvertex) {
         int size = nvertex * nvertex;
         graph = std::unique_ptr<int[]>(new int[size]());
     }
@@ -29,8 +29,9 @@ struct graphAPSPTopology {
  * @param pitch: Length of row in memory
  * @param graph: Array of graph with distance between vertex on device
  */
-static __global__
-void _blocked_fw_dependent_ph(const int blockId, size_t pitch, const int nvertex, int* const graph) {
+static __global__ void _blocked_fw_dependent_ph(const int blockId, size_t pitch,
+                                                const int nvertex,
+                                                int *const graph) {
     __shared__ int cacheGraph[BLOCK_SIZE][BLOCK_SIZE];
     const int idx(threadIdx.x);
     const int idy(threadIdx.y);
@@ -50,7 +51,7 @@ void _blocked_fw_dependent_ph(const int blockId, size_t pitch, const int nvertex
         return;
     }
 
-    #pragma unroll
+#pragma unroll
     for (int u = 0; u < BLOCK_SIZE; ++u) {
         newPath = cacheGraph[idy][u] + cacheGraph[u][idx];
         if (newPath < cacheGraph[idy][idx]) {
@@ -71,9 +72,12 @@ void _blocked_fw_dependent_ph(const int blockId, size_t pitch, const int nvertex
  * @param pitch: Length of row in memory
  * @param graph: Array of graph with distance between vertex on device
  */
-static __global__
-void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int nvertex, int* const graph) {
-    if (blockIdx.x == blockId) return;
+static __global__ void _blocked_fw_partial_dependent_ph(const int blockId,
+                                                        size_t pitch,
+                                                        const int nvertex,
+                                                        int *const graph) {
+    if (blockIdx.x == blockId)
+        return;
     const int idx(threadIdx.x);
     const int idy(threadIdx.y);
     int v1(BLOCK_SIZE * blockId + idy);
@@ -95,7 +99,7 @@ void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int
     if (blockIdx.y == 0) {
         v2 = BLOCK_SIZE * blockIdx.x + idx;
     } else {
-    // Load j-aligned singly dependent blocks
+        // Load j-aligned singly dependent blocks
         v1 = BLOCK_SIZE * blockIdx.x + idy;
     }
 
@@ -116,7 +120,7 @@ void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int
 
     // Compute i-aligned singly dependent blocks
     if (blockIdx.y == 0) {
-        #pragma unroll
+#pragma unroll
         for (int u = 0; u < BLOCK_SIZE; ++u) {
             newPath = cacheGraphBase[idy][u] + cacheGraph[u][idx];
             if (newPath < currentPath) {
@@ -128,8 +132,8 @@ void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int
             __syncthreads();
         }
     } else {
-    // Compute j-aligned singly dependent blocks
-        #pragma unroll
+// Compute j-aligned singly dependent blocks
+#pragma unroll
         for (int u = 0; u < BLOCK_SIZE; ++u) {
             newPath = cacheGraph[idy][u] + cacheGraphBase[u][idx];
             if (newPath < currentPath) {
@@ -153,9 +157,12 @@ void _blocked_fw_partial_dependent_ph(const int blockId, size_t pitch, const int
  * @param pitch: Length of row in memory
  * @param graph: Array of graph with distance between vertex on device
  */
-static __global__
-void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvertex, int* const graph) {
-    if (blockIdx.x == blockId || blockIdx.y == blockId) return;
+static __global__ void _blocked_fw_independent_ph(const int blockId,
+                                                  size_t pitch,
+                                                  const int nvertex,
+                                                  int *const graph) {
+    if (blockIdx.x == blockId || blockIdx.y == blockId)
+        return;
     const int idx(threadIdx.x);
     const int idy(threadIdx.y);
     const int v1(blockDim.y * blockIdx.y + idy);
@@ -172,15 +179,13 @@ void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvert
     if (v1Row < nvertex && v2 < nvertex) {
         cellId = v1Row * pitch + v2;
         cacheGraphBaseRow[idy][idx] = graph[cellId];
-    }
-    else {
+    } else {
         cacheGraphBaseRow[idy][idx] = INF;
     }
-    if (v1  < nvertex && v2Col < nvertex) {
+    if (v1 < nvertex && v2Col < nvertex) {
         cellId = v1 * pitch + v2Col;
         cacheGraphBaseCol[idy][idx] = graph[cellId];
-    }
-    else {
+    } else {
         cacheGraphBaseCol[idy][idx] = INF;
     }
     // Synchronize to make sure the all value are loaded in virtual block
@@ -195,32 +200,37 @@ void _blocked_fw_independent_ph(const int blockId, size_t pitch, const int nvert
     currentPath = graph[cellId];
     // #pragma unroll
     for (int u = 0; u < BLOCK_SIZE; ++u) {
-       newPath = cacheGraphBaseCol[idy][u] + cacheGraphBaseRow[u][idx];
-       if (currentPath > newPath) {
-           currentPath = newPath;
-       }
+        newPath = cacheGraphBaseCol[idy][u] + cacheGraphBaseRow[u][idx];
+        if (currentPath > newPath) {
+            currentPath = newPath;
+        }
     }
     graph[cellId] = currentPath;
 }
 
 /**
  * Allocate memory on device and copy memory from host to device
- * @param dataHost: Reference to unique ptr to graph data with allocated fields on host
- * @param graphDevice: Pointer to array of graph with distance between vertex on device
+ * @param dataHost: Reference to unique ptr to graph data with allocated fields
+ *on host
+ * @param graphDevice: Pointer to array of graph with distance between vertex on
+ *device
  *
  * @return: Pitch for allocation
  */
-static
-size_t _cudaMoveMemoryToDevice(const std::unique_ptr<graphAPSPTopology> &dataHost, int **graphDevice) {
+static size_t
+_cudaMoveMemoryToDevice(const std::unique_ptr<graphAPSPTopology> &dataHost,
+                        int **graphDevice) {
     size_t height = dataHost->nvertex;
     size_t width = height * sizeof(int);
     size_t pitch;
 
-    // Allocate GPU buffers for matrix of shortest paths d(G) and predecessors p(G)
+    // Allocate GPU buffers for matrix of shortest paths d(G) and predecessors
+    // p(G)
     cudaMallocPitch(graphDevice, &pitch, width, height);
 
     // Copy input from host memory to GPU buffers and
-    cudaMemcpy2D(*graphDevice, pitch, dataHost->graph.get(), width, width, height, cudaMemcpyHostToDevice);
+    cudaMemcpy2D(*graphDevice, pitch, dataHost->graph.get(), width, width,
+                 height, cudaMemcpyHostToDevice);
 
     return pitch;
 }
@@ -229,15 +239,19 @@ size_t _cudaMoveMemoryToDevice(const std::unique_ptr<graphAPSPTopology> &dataHos
  * Copy memory from device to host and free device memory
  *
  * @param graphDevice: Array of graph with distance between vertex on device
- * @param dataHost: Reference to unique ptr to graph data with allocated fields on host
+ * @param dataHost: Reference to unique ptr to graph data with allocated fields
+ *on host
  * @param pitch: Pitch for allocation
  */
-static
-void _cudaMoveMemoryToHost(int *graphDevice, const std::unique_ptr<graphAPSPTopology> &dataHost, size_t pitch) {
+static void
+_cudaMoveMemoryToHost(int *graphDevice,
+                      const std::unique_ptr<graphAPSPTopology> &dataHost,
+                      size_t pitch) {
     size_t height = dataHost->nvertex;
     size_t width = height * sizeof(int);
 
-    cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width, height, cudaMemcpyDeviceToHost);
+    cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width,
+                 height, cudaMemcpyDeviceToHost);
     cudaFree(graphDevice);
 }
 
@@ -249,29 +263,26 @@ void _cudaMoveMemoryToHost(int *graphDevice, const std::unique_ptr<graphAPSPTopo
 void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology> &dataHost) {
     int nvertex(dataHost->nvertex);
     int *graphDevice(NULL);
-    size_t pitch = _cudaMoveMemoryToDevice(dataHost, &graphDevice);
-
-    const int tile_size(std::ceil((float) nvertex / BLOCK_SIZE));
-    dim3 gridPhase1(1 ,1, 1);
+    const int tile_size(std::ceil((float)nvertex / BLOCK_SIZE));
+    dim3 gridPhase1(1, 1);
     dim3 gridPhase2(tile_size, 2);
     dim3 gridPhase3(tile_size, tile_size);
-    dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE, 1);
-    int numBlock = (nvertex - 1) / BLOCK_SIZE + 1;
+    dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE);
 
-    for(int blockID = 0; blockID < numBlock; ++blockID) {
+    size_t pitch = _cudaMoveMemoryToDevice(dataHost, &graphDevice);
+    for (int blockID = 0; blockID < tile_size; ++blockID) {
         // Start dependent phase
-        _blocked_fw_dependent_ph<<<gridPhase1, dimBlockSize>>>
-                (blockID, pitch / sizeof(int), nvertex, graphDevice);
+        _blocked_fw_dependent_ph << <gridPhase1, dimBlockSize>>>
+            (blockID, pitch / sizeof(int), nvertex, graphDevice);
 
         // Start partially dependent phase
-        _blocked_fw_partial_dependent_ph<<<gridPhase2, dimBlockSize>>>
-                (blockID, pitch / sizeof(int), nvertex, graphDevice);
+        _blocked_fw_partial_dependent_ph << <gridPhase2, dimBlockSize>>>
+            (blockID, pitch / sizeof(int), nvertex, graphDevice);
 
         // Start independent phase
-        _blocked_fw_independent_ph<<<gridPhase3, dimBlockSize>>>
-                (blockID, pitch / sizeof(int), nvertex, graphDevice);
+        _blocked_fw_independent_ph << <gridPhase3, dimBlockSize>>>
+            (blockID, pitch / sizeof(int), nvertex, graphDevice);
     }
-
     _cudaMoveMemoryToHost(graphDevice, dataHost, pitch);
 }
 
@@ -281,10 +292,10 @@ void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology> &dataHost) {
  * @param graph: pointer to graph data
  * @param max: maximum value in graph path
  */
- void printData(const std::unique_ptr<graphAPSPTopology>& graph, int maxValue) {
+void printData(const std::unique_ptr<graphAPSPTopology> &graph, int maxValue) {
     // Lambda function for printMatrix -1 means no path
     std::ios::sync_with_stdio(false);
-    auto printMatrix = [](std::unique_ptr<int []>& graph, int n, int max) {
+    auto printMatrix = [](std::unique_ptr<int[]> &graph, int n, int max) {
         std::cout << "[";
         for (int i = 0; i < n; ++i) {
             std::cout << "[";
@@ -292,8 +303,9 @@ void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology> &dataHost) {
                 if (max > graph[i * n + j])
                     std::cout << graph[i * n + j];
                 else
-                    std::cout << -1 ;
-                if (j != n - 1) std::cout << ",";
+                    std::cout << -1;
+                if (j != n - 1)
+                    std::cout << ",";
             }
             if (i != n - 1)
                 std::cout << "],\n";
@@ -307,15 +319,17 @@ void cudaBlockedFW(const std::unique_ptr<graphAPSPTopology> &dataHost) {
     printMatrix(graph->graph, graph->nvertex, maxValue);
 }
 
-void Write_file(const std::string &filename, const std::unique_ptr<graphAPSPTopology> &data) {
+void Write_file(const std::string &filename,
+                const std::unique_ptr<graphAPSPTopology> &data) {
     std::ofstream out_file(filename);
     for (int i = 0; i < data->nvertex; ++i) {
-        out_file.write((char *)&data->graph[i * data->nvertex], sizeof(int) * data->nvertex);
+        out_file.write((char *)&data->graph[i * data->nvertex],
+                       sizeof(int) * data->nvertex);
     }
     out_file.close();
 }
 
-int main (int argc, char **argv) {
+int main(int argc, char **argv) {
     std::fstream file;
     int num_vertex = 0;
     int num_edge = 0;
@@ -328,13 +342,15 @@ int main (int argc, char **argv) {
     file.open(in_filename, std::ios::in | std::ios::binary);
     file.read((char *)&num_vertex, sizeof(num_vertex));
     file.read((char *)&num_edge, sizeof(num_edge));
-    std::unique_ptr<graphAPSPTopology> AdjMatrix(new graphAPSPTopology(num_vertex));
+    std::unique_ptr<graphAPSPTopology> AdjMatrix(
+        new graphAPSPTopology(num_vertex));
 
-    std::fill_n(AdjMatrix->graph.get(), num_vertex * num_vertex, INF);  
+    std::fill_n(AdjMatrix->graph.get(), num_vertex * num_vertex, INF);
     for (int i = 0; i < num_vertex; i++) {
         AdjMatrix->graph[i * num_vertex + i] = 0;
     }
-
+    // std::cout << "Vertex: " << num_vertex << ", Edge: " << num_edge
+    //           << std::endl;
     int *tmp(new int[num_edge * 3]);
     file.read((char *)tmp, sizeof(int) * num_edge * 3);
     for (int i = 0; i < num_edge; ++i) {
@@ -347,7 +363,7 @@ int main (int argc, char **argv) {
     file.close();
     cudaBlockedFW(AdjMatrix);
     Write_file(out_filename, AdjMatrix);
-    delete[] (tmp);
+    delete[](tmp);
 
     return 0;
 }
