@@ -15,8 +15,7 @@ struct Graph {
     std::unique_ptr<int[]> graph; // graph matrix
 
     explicit Graph(int nvertex) : nvertex(nvertex) {
-        int size = nvertex * nvertex;
-        graph = std::unique_ptr<int[]>(new int[size]());
+        graph = std::unique_ptr<int[]>(new int[nvertex * nvertex]());
     }
 };
 
@@ -87,6 +86,7 @@ static __global__ void phase2(const int blockId, const size_t pitch,
     }
     cacheGraph[idy][idx] = currentPath;
     __syncthreads();
+    // Early stop unused thread to reduce sync cost
     if (v1 > nvertex || v2 > nvertex) {
         return;
     }
@@ -99,7 +99,6 @@ static __global__ void phase2(const int blockId, const size_t pitch,
             if (newPath < currentPath) {
                 currentPath = newPath;
             }
-            // Update new values
             cacheGraph[idy][idx] = currentPath;
             __syncthreads();
         }
@@ -110,7 +109,6 @@ static __global__ void phase2(const int blockId, const size_t pitch,
             if (newPath < currentPath) {
                 currentPath = newPath;
             }
-            // Update new values
             cacheGraph[idy][idx] = currentPath;
             __syncthreads();
         }
@@ -135,7 +133,7 @@ static __global__ void phase3(const int blockId, const size_t pitch,
     __shared__ int cacheGraphBaseRow[BLOCK_SIZE][BLOCK_SIZE];
     __shared__ int cacheGraphBaseCol[BLOCK_SIZE][BLOCK_SIZE];
 
-    // Load data for block
+    // Copy data to shared memory
     if (v1Row < nvertex && v2 < nvertex) {
         tId = v1Row * pitch + v2;
         cacheGraphBaseRow[idy][idx] = graph[tId];
@@ -149,12 +147,11 @@ static __global__ void phase3(const int blockId, const size_t pitch,
         cacheGraphBaseCol[idy][idx] = INF;
     }
     __syncthreads();
-
+    // Early stop unused thread to reduce sync cost
     if (v1 > nvertex || v2 > nvertex) {
         return;
     }
 
-    // Compute data for block
     tId = v1 * pitch + v2;
     currentPath = graph[tId];
 #pragma unroll
@@ -173,9 +170,9 @@ static size_t _cudaMoveMemoryToDevice(const std::unique_ptr<Graph> &dataHost,
     const size_t width(height * sizeof(int));
     size_t pitch(0);
 
-    // Allocate GPU buffers for matrix of shortest paths d(G) and predecessors
+    // Allocate GPU memory
     cudaMallocPitch(graphDevice, &pitch, width, height);
-    // Copy input from host memory to GPU buffers and
+    // Copy input from host memory to GPU memory
     cudaMemcpy2D(*graphDevice, pitch, dataHost->graph.get(), width, width,
                  height, cudaMemcpyHostToDevice);
 
@@ -188,8 +185,10 @@ static void _cudaMoveMemoryToHost(int *graphDevice,
     const size_t height(dataHost->nvertex);
     const size_t width(height * sizeof(int));
 
+    // Copy result to host memory from GPU memory
     cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width,
                  height, cudaMemcpyDeviceToHost);
+    // Free GPU memory
     cudaFree(graphDevice);
 }
 
