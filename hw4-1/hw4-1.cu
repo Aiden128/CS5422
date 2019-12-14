@@ -194,15 +194,15 @@ static void _cudaMoveMemoryToHost(int *graphDevice,
 
 void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost) {
     const int nvertex(dataHost->nvertex);
-    const int tile_size(std::ceil((float)nvertex / BLOCK_SIZE));
+    const int block_num(std::ceil((float)nvertex / BLOCK_SIZE));
     const dim3 gridPhase1(1, 1);
-    const dim3 gridPhase2(tile_size, 2);
-    const dim3 gridPhase3(tile_size, tile_size);
+    const dim3 gridPhase2(block_num, 2);
+    const dim3 gridPhase3(block_num, block_num);
     const dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE);
     int *graphDevice(NULL);
 
     size_t pitch = _cudaMoveMemoryToDevice(dataHost, &graphDevice);
-    for (int blockID = 0; blockID < tile_size; ++blockID) {
+    for (int blockID = 0; blockID < block_num; ++blockID) {
         // phase1
         phase1 <<<gridPhase1, dimBlockSize>>>
             (blockID, pitch / sizeof(int), nvertex, graphDevice);
