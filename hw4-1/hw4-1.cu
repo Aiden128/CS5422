@@ -20,18 +20,8 @@ struct Graph {
     }
 };
 
-/**
- * Blocked CUDA kernel implementation algorithm Floyd Wharshall for APSP
- * Dependent phase 1
- *
- * @param blockId: Index of block
- * @param nvertex: Number of all vertex in graph
- * @param pitch: Length of row in memory
- * @param graph: Array of graph with distance between vertex on device
- */
-static __global__ void _blocked_fw_dependent_ph(const int blockId, const size_t pitch,
-                                                const int nvertex,
-                                                int *const graph) {
+static __global__ void phase1(const int blockId, const size_t pitch,
+                              const int nvertex, int *const graph) {
     __shared__ int cacheGraph[BLOCK_SIZE][BLOCK_SIZE];
     const int idx(threadIdx.x);
     const int idy(threadIdx.y);
@@ -63,19 +53,8 @@ static __global__ void _blocked_fw_dependent_ph(const int blockId, const size_t 
     graph[tId] = cacheGraph[idy][idx];
 }
 
-/**
- * Blocked CUDA kernel implementation algorithm Floyd Wharshall for APSP
- * Partial dependent phase 2
- *
- * @param blockId: Index of block
- * @param nvertex: Number of all vertex in graph
- * @param pitch: Length of row in memory
- * @param graph: Array of graph with distance between vertex on device
- */
-static __global__ void _blocked_fw_partial_dependent_ph(const int blockId,
-                                                        const size_t pitch,
-                                                        const int nvertex,
-                                                        int *const graph) {
+static __global__ void phase2(const int blockId, const size_t pitch,
+                              const int nvertex, int *const graph) {
     if (blockIdx.x == blockId) {
         return;
     }
@@ -124,7 +103,7 @@ static __global__ void _blocked_fw_partial_dependent_ph(const int blockId,
             cacheGraph[idy][idx] = currentPath;
             __syncthreads();
         }
-    } else { 
+    } else {
 #pragma unroll
         for (int u = 0; u < BLOCK_SIZE; ++u) {
             newPath = cacheGraph[idy][u] + cacheGraphBase[u][idx];
@@ -139,19 +118,8 @@ static __global__ void _blocked_fw_partial_dependent_ph(const int blockId,
     graph[tId] = currentPath;
 }
 
-/**
- * Blocked CUDA kernel implementation algorithm Floyd Wharshall for APSP
- * Independent phase 3
- *
- * @param blockId: Index of block
- * @param nvertex: Number of all vertex in graph
- * @param pitch: Length of row in memory
- * @param graph: Array of graph with distance between vertex on device
- */
-static __global__ void _blocked_fw_independent_ph(const int blockId,
-                                                  const size_t pitch,
-                                                  const int nvertex,
-                                                  int *const graph) {
+static __global__ void phase3(const int blockId, const size_t pitch,
+                              const int nvertex, int *const graph) {
     if (blockIdx.x == blockId || blockIdx.y == blockId) {
         return;
     }
@@ -189,7 +157,7 @@ static __global__ void _blocked_fw_independent_ph(const int blockId,
     // Compute data for block
     tId = v1 * pitch + v2;
     currentPath = graph[tId];
-    #pragma unroll
+#pragma unroll
     for (int u = 0; u < BLOCK_SIZE; ++u) {
         newPath = cacheGraphBaseCol[idy][u] + cacheGraphBaseRow[u][idx];
         if (currentPath > newPath) {
@@ -199,18 +167,8 @@ static __global__ void _blocked_fw_independent_ph(const int blockId,
     graph[tId] = currentPath;
 }
 
-/**
- * Allocate memory on device and copy memory from host to device
- * @param dataHost: Reference to unique ptr to graph data with allocated fields
- *on host
- * @param graphDevice: Pointer to array of graph with distance between vertex on
- *device
- *
- * @return: Pitch for allocation
- */
-static size_t
-_cudaMoveMemoryToDevice(const std::unique_ptr<Graph> &dataHost,
-                        int **graphDevice) {
+static size_t _cudaMoveMemoryToDevice(const std::unique_ptr<Graph> &dataHost,
+                                      int **graphDevice) {
     const size_t height(dataHost->nvertex);
     const size_t width(height * sizeof(int));
     size_t pitch(0);
@@ -224,18 +182,9 @@ _cudaMoveMemoryToDevice(const std::unique_ptr<Graph> &dataHost,
     return pitch;
 }
 
-/**
- * Copy memory from device to host and free device memory
- *
- * @param graphDevice: Array of graph with distance between vertex on device
- * @param dataHost: Reference to unique ptr to graph data with allocated fields
- *on host
- * @param pitch: Pitch for allocation
- */
-static void
-_cudaMoveMemoryToHost(int *graphDevice,
-                      const std::unique_ptr<Graph> &dataHost,
-                      const size_t &pitch) {
+static void _cudaMoveMemoryToHost(int *graphDevice,
+                                  const std::unique_ptr<Graph> &dataHost,
+                                  const size_t &pitch) {
     const size_t height(dataHost->nvertex);
     const size_t width(height * sizeof(int));
 
@@ -244,11 +193,6 @@ _cudaMoveMemoryToHost(int *graphDevice,
     cudaFree(graphDevice);
 }
 
-/**
- * Blocked implementation of Floyd Warshall algorithm in CUDA
- *
- * @param data: unique ptr to graph data with allocated fields on host
- */
 void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost) {
     const int nvertex(dataHost->nvertex);
     const int tile_size(std::ceil((float)nvertex / BLOCK_SIZE));
@@ -261,13 +205,13 @@ void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost) {
     size_t pitch = _cudaMoveMemoryToDevice(dataHost, &graphDevice);
     for (int blockID = 0; blockID < tile_size; ++blockID) {
         // phase1
-        _blocked_fw_dependent_ph << <gridPhase1, dimBlockSize>>>
+        phase1 <<<gridPhase1, dimBlockSize>>>
             (blockID, pitch / sizeof(int), nvertex, graphDevice);
         // phase2
-        _blocked_fw_partial_dependent_ph << <gridPhase2, dimBlockSize>>>
+        phase2 <<<gridPhase2, dimBlockSize>>>
             (blockID, pitch / sizeof(int), nvertex, graphDevice);
         // phase3
-        _blocked_fw_independent_ph << <gridPhase3, dimBlockSize>>>
+        phase3 <<<gridPhase3, dimBlockSize>>>
             (blockID, pitch / sizeof(int), nvertex, graphDevice);
     }
     _cudaMoveMemoryToHost(graphDevice, dataHost, pitch);
@@ -284,9 +228,8 @@ void Write_file(const std::string &filename,
 }
 
 int main(int argc, char **argv) {
-    const std::string in_filename(argv[1]);
     const std::string out_filename(argv[2]);
-    std::fstream file;
+    std::ifstream file(argv[1]);
     int num_vertex(0);
     int num_edge(0);
     int src(0);
@@ -294,7 +237,6 @@ int main(int argc, char **argv) {
     int weight(0);
 
     // Read input params from file
-    file.open(in_filename, std::ios::in | std::ios::binary);
     file.read((char *)&num_vertex, sizeof(num_vertex));
     file.read((char *)&num_edge, sizeof(num_edge));
     std::unique_ptr<Graph> AdjMatrix(new Graph(num_vertex));
@@ -304,7 +246,7 @@ int main(int argc, char **argv) {
         AdjMatrix->graph[i * num_vertex + i] = 0;
     }
     // Build graph
-    std::unique_ptr<int[]> tmp(new int [num_edge * 3]);
+    std::unique_ptr<int[]> tmp(new int[num_edge * 3]);
     file.read((char *)tmp.get(), sizeof(int) * num_edge * 3);
     for (int i = 0; i < num_edge; ++i) {
         src = tmp[i * 3];
