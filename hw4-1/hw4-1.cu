@@ -7,8 +7,8 @@
 #include <iostream>
 #include <cuda_profiler_api.h>
 
-const int BLOCK_SIZE = 32;
-const int INF = 1073741823;
+constexpr int BLOCK_SIZE = 32;
+constexpr int INF = 1073741823;
 
 // Graph structure
 struct Graph {
@@ -22,7 +22,7 @@ struct Graph {
 
 static __global__ void phase1(const int blockId, const size_t pitch,
                               const int nvertex, int *const graph) {
-    __shared__ int cacheGraph[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ int cache[BLOCK_SIZE][BLOCK_SIZE];
     const int idx(threadIdx.x);
     const int idy(threadIdx.y);
     const int v1(BLOCK_SIZE * blockId + idy);
@@ -32,9 +32,9 @@ static __global__ void phase1(const int blockId, const size_t pitch,
 
     // Copy data to shared memory
     if (v1 < nvertex && v2 < nvertex) {
-        cacheGraph[idy][idx] = graph[tId];
+        cache[idy][idx] = graph[tId];
     } else {
-        cacheGraph[idy][idx] = INF;
+        cache[idy][idx] = INF;
     }
     __syncthreads();
     // Early stop unused thread to reduce sync cost
@@ -44,13 +44,13 @@ static __global__ void phase1(const int blockId, const size_t pitch,
 
 #pragma unroll
     for (int u = 0; u < BLOCK_SIZE; ++u) {
-        newPath = cacheGraph[idy][u] + cacheGraph[u][idx];
-        if (newPath < cacheGraph[idy][idx]) {
-            cacheGraph[idy][idx] = newPath;
+        newPath = cache[idy][u] + cache[u][idx];
+        if (newPath < cache[idy][idx]) {
+            cache[idy][idx] = newPath;
         }
         __syncthreads();
     }
-    graph[tId] = cacheGraph[idy][idx];
+    graph[tId] = cache[idy][idx];
 }
 
 static __global__ void phase2(const int blockId, const size_t pitch,
@@ -65,14 +65,14 @@ static __global__ void phase2(const int blockId, const size_t pitch,
     int currentPath(0);
     int tId(v1 * pitch + v2);
     int newPath(0);
-    __shared__ int cacheGraphBase[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ int cacheGraph[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ int cacheBase[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ int cache[BLOCK_SIZE][BLOCK_SIZE];
 
     // Copy data to shared memory
     if (v1 < nvertex && v2 < nvertex) {
-        cacheGraphBase[idy][idx] = graph[tId];
+        cacheBase[idy][idx] = graph[tId];
     } else {
-        cacheGraphBase[idy][idx] = INF;
+        cacheBase[idy][idx] = INF;
     }
     if (blockIdx.y == 0) {
         v2 = BLOCK_SIZE * blockIdx.x + idx;
@@ -85,33 +85,30 @@ static __global__ void phase2(const int blockId, const size_t pitch,
     } else {
         currentPath = INF;
     }
-    cacheGraph[idy][idx] = currentPath;
+    cache[idy][idx] = currentPath;
     __syncthreads();
     // Early stop unused thread to reduce sync cost
     if (v1 >= nvertex || v2 >= nvertex) {
         return;
     }
 
-    // Compute i-aligned singly dependent blocks
     if (blockIdx.y == 0) {
 #pragma unroll
         for (int u = 0; u < BLOCK_SIZE; ++u) {
-            newPath = cacheGraphBase[idy][u] + cacheGraph[u][idx];
+            newPath = cacheBase[idy][u] + cache[u][idx];
             if (newPath < currentPath) {
                 currentPath = newPath;
             }
-            cacheGraph[idy][idx] = currentPath;
-            __syncthreads();
+            cache[idy][idx] = currentPath;
         }
     } else {
 #pragma unroll
         for (int u = 0; u < BLOCK_SIZE; ++u) {
-            newPath = cacheGraph[idy][u] + cacheGraphBase[u][idx];
+            newPath = cache[idy][u] + cacheBase[u][idx];
             if (newPath < currentPath) {
                 currentPath = newPath;
             }
-            cacheGraph[idy][idx] = currentPath;
-            __syncthreads();
+            cache[idy][idx] = currentPath;
         }
     }
     graph[tId] = currentPath;
@@ -128,24 +125,25 @@ static __global__ void phase3(const int blockId, const size_t pitch,
     const int v2(blockDim.x * blockIdx.x + idx);
     const int v1Row(BLOCK_SIZE * blockId + idy);
     const int v2Col(BLOCK_SIZE * blockId + idx);
-    int tId(0);
+    const int tId(v1 * pitch + v2);
+    int index(0);
     int currentPath(0);
     int newPath(0);
-    __shared__ int cacheGraphBaseRow[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ int cacheGraphBaseCol[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ int cacheRow[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ int cacheCol[BLOCK_SIZE][BLOCK_SIZE];
 
     // Copy data to shared memory
     if (v1Row < nvertex && v2 < nvertex) {
-        tId = v1Row * pitch + v2;
-        cacheGraphBaseRow[idy][idx] = graph[tId];
+        index = (v1Row * pitch + v2);
+        cacheRow[idy][idx] = graph[index];
     } else {
-        cacheGraphBaseRow[idy][idx] = INF;
+        cacheRow[idy][idx] = INF;
     }
     if (v1 < nvertex && v2Col < nvertex) {
-        tId = v1 * pitch + v2Col;
-        cacheGraphBaseCol[idy][idx] = graph[tId];
+        index = (v1 * pitch + v2Col);
+        cacheCol[idy][idx] = graph[index];
     } else {
-        cacheGraphBaseCol[idy][idx] = INF;
+        cacheCol[idy][idx] = INF;
     }
     __syncthreads();
     // Early stop unused thread to reduce sync cost
@@ -153,11 +151,10 @@ static __global__ void phase3(const int blockId, const size_t pitch,
         return;
     }
 
-    tId = v1 * pitch + v2;
     currentPath = graph[tId];
 #pragma unroll
     for (int u = 0; u < BLOCK_SIZE; ++u) {
-        newPath = cacheGraphBaseCol[idy][u] + cacheGraphBaseRow[u][idx];
+        newPath = cacheCol[idy][u] + cacheRow[u][idx];
         if (currentPath > newPath) {
             currentPath = newPath;
         }
