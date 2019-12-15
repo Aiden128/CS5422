@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include <iostream>
+#include <cuda_profiler_api.h>
 
 const int BLOCK_SIZE = 32;
 const int INF = 1073741823;
@@ -37,7 +38,7 @@ static __global__ void phase1(const int blockId, const size_t pitch,
     }
     __syncthreads();
     // Early stop unused thread to reduce sync cost
-    if (v1 > nvertex || v2 > nvertex) {
+    if (v1 >= nvertex || v2 >= nvertex) {
         return;
     }
 
@@ -87,7 +88,7 @@ static __global__ void phase2(const int blockId, const size_t pitch,
     cacheGraph[idy][idx] = currentPath;
     __syncthreads();
     // Early stop unused thread to reduce sync cost
-    if (v1 > nvertex || v2 > nvertex) {
+    if (v1 >= nvertex || v2 >= nvertex) {
         return;
     }
 
@@ -148,7 +149,7 @@ static __global__ void phase3(const int blockId, const size_t pitch,
     }
     __syncthreads();
     // Early stop unused thread to reduce sync cost
-    if (v1 > nvertex || v2 > nvertex) {
+    if (v1 >= nvertex || v2 >= nvertex) {
         return;
     }
 
@@ -201,6 +202,7 @@ void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost) {
     const dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE);
     int *graphDevice(NULL);
 
+    cudaProfilerStart();
     size_t pitch = _cudaMoveMemoryToDevice(dataHost, &graphDevice);
     for (int blockID = 0; blockID < block_num; ++blockID) {
         // phase1
@@ -214,6 +216,7 @@ void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost) {
             (blockID, pitch / sizeof(int), nvertex, graphDevice);
     }
     _cudaMoveMemoryToHost(graphDevice, dataHost, pitch);
+    cudaProfilerStop();
 }
 
 void Write_file(const std::string &filename,
