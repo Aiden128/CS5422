@@ -139,7 +139,7 @@ In this experiment, I measure the device memory throughput instead of global mem
 
 As the figure shows, we can see that when block size is set to 32, the phase 2 throughput is significantly lowered, which gives me a clue to find out the IPC is lowered in phase 2.
 
-###Optimization
+### Optimization
 
 ![opt](README.assets/opt.png)
 
