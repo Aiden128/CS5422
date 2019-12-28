@@ -64,10 +64,10 @@ int main(int argc, char **argv) {
     }
     file.close();
     // Run APSP algorithm
-    int comp_V = num_vertex + (BLOCK_SIZE - ((num_vertex-1) % BLOCK_SIZE + 1));
-    int *adj_mat_d[2];
-    int round = std::ceil((float) comp_V / BLOCK_SIZE);
-    
+    const int comp_V = (num_vertex + (BLOCK_SIZE - ((num_vertex-1) % BLOCK_SIZE + 1)));
+    const int round = std::ceil((float) comp_V / BLOCK_SIZE);
+    int *graph_d[2];
+
     // 2D block
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
     dim3 p1(1, 1);
@@ -78,31 +78,31 @@ int main(int argc, char **argv) {
         int thread_id = omp_get_thread_num();
         cudaSetDevice(thread_id);
         // Malloc memory
-        cudaMalloc((void**) &adj_mat_d[thread_id], sz);
+        cudaMalloc((void**) &graph_d[thread_id], sz);
 
         // divide data
         int round_per_thd = round / 2;
         int y_offset = round_per_thd * thread_id;
-        if(thread_id == 1)
+        if(thread_id == 1) {
             round_per_thd += round % 2;
-
+        }
         dim3 p3(round_per_thd, round);
         
         size_t cp_amount = comp_V * BLOCK_SIZE * round_per_thd * sizeof(int);
-        cudaMemcpy(adj_mat_d[thread_id] + y_offset *BLOCK_SIZE * comp_V, AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * comp_V, cp_amount, cudaMemcpyHostToDevice);
+        cudaMemcpy(graph_d[thread_id] + y_offset *BLOCK_SIZE * comp_V, AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * comp_V, cp_amount, cudaMemcpyHostToDevice);
 
         size_t block_row_sz = BLOCK_SIZE * comp_V * sizeof(int);
         for(int r = 0; r < round; r++){    
             if (r >= y_offset && r < (y_offset + round_per_thd)) {
-                cudaMemcpy(AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V, adj_mat_d[thread_id] + r * BLOCK_SIZE * comp_V, block_row_sz, cudaMemcpyDeviceToHost);
+                cudaMemcpy(AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V, graph_d[thread_id] + r * BLOCK_SIZE * comp_V, block_row_sz, cudaMemcpyDeviceToHost);
             }
             #pragma omp barrier
-            cudaMemcpy(adj_mat_d[thread_id] + r * BLOCK_SIZE * comp_V, AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V, block_row_sz, cudaMemcpyHostToDevice);
-            phase1 <<<p1, threads, sizeof(int)*BLOCK_SIZE*BLOCK_SIZE>>>(r, comp_V, adj_mat_d[thread_id]);
-            phase2 <<<p2, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE>>>(r, comp_V, adj_mat_d[thread_id]);
-            phase3 <<<p3, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE>>>(r, comp_V, y_offset, adj_mat_d[thread_id]);
+            cudaMemcpy(graph_d[thread_id] + r * BLOCK_SIZE * comp_V, AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V, block_row_sz, cudaMemcpyHostToDevice);
+            phase1 <<<p1, threads, sizeof(int)*BLOCK_SIZE*BLOCK_SIZE>>>(r, comp_V, graph_d[thread_id]);
+            phase2 <<<p2, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE>>>(r, comp_V, graph_d[thread_id]);
+            phase3 <<<p3, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE>>>(r, comp_V, y_offset, graph_d[thread_id]);
         }
-        cudaMemcpy(AdjMatrix->graph.get() + y_offset *BLOCK_SIZE * comp_V, adj_mat_d[thread_id] + y_offset *BLOCK_SIZE * comp_V, block_row_sz * round_per_thd, cudaMemcpyDeviceToHost);
+        cudaMemcpy(AdjMatrix->graph.get() + y_offset *BLOCK_SIZE * comp_V, graph_d[thread_id] + y_offset *BLOCK_SIZE * comp_V, block_row_sz * round_per_thd, cudaMemcpyDeviceToHost);
         #pragma omp barrier
     }
 
@@ -113,74 +113,76 @@ int main(int argc, char **argv) {
 }
 
 // phase 1 kernel
-__global__ void phase1(const int round, const int comp_V, int *adj_mat_d) {
-    
-    int i = threadIdx.y, 
-        j = threadIdx.x,
-        offset = BLOCK_SIZE * round;
-    
+__global__ void phase1(const int round, const int comp_V, int *graph_d) {
+    const int i(threadIdx.y);
+    const int j(threadIdx.x);
+    const int offset(BLOCK_SIZE * round);
+    int newPath(0);
     extern __shared__ int cache[];
 
-    cache[i * BLOCK_SIZE + j] = adj_mat_d[(i + offset) * comp_V + (j + offset)];
+    cache[i * BLOCK_SIZE + j] = graph_d[(i + offset) * comp_V + (j + offset)];
     __syncthreads();
 
 #pragma unroll
     for(int k = 0; k < BLOCK_SIZE; k++){
-        if (cache[i * BLOCK_SIZE + j] > cache[i * BLOCK_SIZE + k] + cache[k * BLOCK_SIZE + j]){
-            cache[i * BLOCK_SIZE + j] = cache[i * BLOCK_SIZE + k] + cache[k * BLOCK_SIZE + j];
+        newPath = cache[i * BLOCK_SIZE + k] + cache[k * BLOCK_SIZE + j];
+        if (cache[i * BLOCK_SIZE + j] > newPath){
+            cache[i * BLOCK_SIZE + j] = newPath;
         }
     }
-    adj_mat_d[(i + offset) * comp_V + (j + offset)] = cache[i * BLOCK_SIZE + j];
+    graph_d[(i + offset) * comp_V + (j + offset)] = cache[i * BLOCK_SIZE + j];
 }
 
-// phase 2 kernel
-__global__ void phase2(const int round, const int comp_V, int* adj_mat_d) {
-    int total_round = comp_V/BLOCK_SIZE;
-    int i = threadIdx.y,
-        j = threadIdx.x,
-        // column or row?
-        i_off = blockIdx.x == 1? BLOCK_SIZE * ((blockIdx.y + round + 1) % total_round): BLOCK_SIZE * round,
-        j_off = blockIdx.x == 1? BLOCK_SIZE * round : BLOCK_SIZE * ((blockIdx.y + round + 1) % total_round);
-    
+__global__ void phase2(const int round, const int comp_V, int* graph_d) {
+    const int total_round(comp_V/BLOCK_SIZE);
+    const int i(threadIdx.y);
+    const int j(threadIdx.x);
+    const int i_off(blockIdx.x == 1 ? BLOCK_SIZE * ((blockIdx.y + round + 1) % total_round): BLOCK_SIZE * round);
+    const int j_off(blockIdx.x == 1 ? BLOCK_SIZE * round : BLOCK_SIZE * ((blockIdx.y + round + 1) % total_round));
+    int newPath(0);
     extern __shared__ int cache[];
     
-    cache[i * BLOCK_SIZE + j] = adj_mat_d[(i + i_off) * comp_V + (j+j_off)];
-    cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] = adj_mat_d[(i + i_off) * comp_V + j + round*BLOCK_SIZE];
-    cache[(i + 2*BLOCK_SIZE) * BLOCK_SIZE + j] = adj_mat_d[(i + round * BLOCK_SIZE) * comp_V + (j + j_off)];
+    cache[i * BLOCK_SIZE + j] = graph_d[(i + i_off) * comp_V + (j+j_off)];
+    cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] = graph_d[(i + i_off) * comp_V + j + round*BLOCK_SIZE];
+    cache[(i + 2*BLOCK_SIZE) * BLOCK_SIZE + j] = graph_d[(i + round * BLOCK_SIZE) * comp_V + (j + j_off)];
     __syncthreads();
 
 #pragma unroll
     for (int k = 0; k < BLOCK_SIZE; k++) {
-        if (cache[i * BLOCK_SIZE + j] > cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] + cache[(k + 2*BLOCK_SIZE) * BLOCK_SIZE + j]) {
-            cache[i * BLOCK_SIZE + j] = cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] + cache[(k + 2*BLOCK_SIZE) * BLOCK_SIZE + j]; 
-            
-            if (round == i_off/BLOCK_SIZE) 
-                cache[(i + 2*BLOCK_SIZE) * BLOCK_SIZE + j] = cache[i * BLOCK_SIZE + j];
-            if (round == j_off/BLOCK_SIZE) 
-                cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] = cache[i * BLOCK_SIZE + j];
+        newPath = cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] + cache[(k + 2*BLOCK_SIZE) * BLOCK_SIZE + j];
+        if (cache[i * BLOCK_SIZE + j] > newPath) {
+            cache[i * BLOCK_SIZE + j] = newPath; 
+            if (round == i_off/BLOCK_SIZE) {
+                cache[(i + 2 * BLOCK_SIZE) * BLOCK_SIZE + j] = newPath;
+            }
+            if (round == j_off/BLOCK_SIZE) { 
+                cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] = newPath;
+            }
         }
     }
-    adj_mat_d[(i + i_off) * comp_V + (j+j_off)] = cache[i * BLOCK_SIZE + j];
+    graph_d[(i + i_off) * comp_V + (j+j_off)] = cache[i * BLOCK_SIZE + j];
 }
 
-__global__ void phase3(const int round, const int comp_V, const int offset, int* adj_mat_d) {
-    int i = threadIdx.y,
-        j = threadIdx.x,
-        i_off = BLOCK_SIZE * (blockIdx.x + offset),
-        j_off = BLOCK_SIZE * blockIdx.y;
+__global__ void phase3(const int round, const int comp_V, const int offset, int* graph_d) {
+    const int i (threadIdx.y);
+    const int j (threadIdx.x);
+    const int i_off(BLOCK_SIZE * (blockIdx.x + offset));
+    const int j_off(BLOCK_SIZE * blockIdx.y);
+    int newPath(0);
     extern __shared__ int cache[];
 
-    cache[i * BLOCK_SIZE + j] = adj_mat_d[(i + i_off) * comp_V + (j+j_off)];
-    cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] = adj_mat_d[(i + i_off) * comp_V + j + round*BLOCK_SIZE];
-    cache[(i + 2*BLOCK_SIZE) * BLOCK_SIZE + j] = adj_mat_d[(i + round * BLOCK_SIZE) * comp_V + (j + j_off)];
+    cache[i * BLOCK_SIZE + j] = graph_d[(i + i_off) * comp_V + (j+j_off)];
+    cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] = graph_d[(i + i_off) * comp_V + j + round*BLOCK_SIZE];
+    cache[(i + 2*BLOCK_SIZE) * BLOCK_SIZE + j] = graph_d[(i + round * BLOCK_SIZE) * comp_V + (j + j_off)];
     __syncthreads();
     
 #pragma unroll
     for (int k = 0; k < BLOCK_SIZE; k++) {
-        if (cache[i * BLOCK_SIZE + j] > cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] + cache[(k + 2*BLOCK_SIZE) * BLOCK_SIZE + j])
-            cache[i * BLOCK_SIZE + j] = cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] + cache[(k + 2*BLOCK_SIZE) * BLOCK_SIZE + j];
+        newPath = cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] + cache[(k + 2*BLOCK_SIZE) * BLOCK_SIZE + j];
+        if (cache[i * BLOCK_SIZE + j] > newPath)
+            cache[i * BLOCK_SIZE + j] = newPath;
     }
-    adj_mat_d[(i + i_off) * comp_V + (j+j_off)] = cache[i * BLOCK_SIZE + j];
+    graph_d[(i + i_off) * comp_V + (j+j_off)] = cache[i * BLOCK_SIZE + j];
 }
 
 void Write_file(const std::string &filename,
