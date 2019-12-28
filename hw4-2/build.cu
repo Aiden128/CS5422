@@ -73,11 +73,12 @@ int main(int argc, char **argv) {
     dim3 p1(1, 1);
     dim3 p2(2, round-1);
     size_t sz = comp_V * comp_V * sizeof(int);
+    cudaStream_t streams[2];
     #pragma omp parallel num_threads(2)
     {
         int thread_id = omp_get_thread_num();
         cudaSetDevice(thread_id);
-
+        cudaStreamCreate(&streams[thread_id]);
         // Malloc memory
         cudaMalloc((void**) &adj_mat_d[thread_id], sz);
 
@@ -90,7 +91,7 @@ int main(int argc, char **argv) {
         dim3 p3(round_per_thd, round);
         
         size_t cp_amount = comp_V * BLOCK_SIZE * round_per_thd * sizeof(int);
-        cudaMemcpy(adj_mat_d[thread_id] + y_offset *BLOCK_SIZE * comp_V, AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * comp_V, cp_amount, cudaMemcpyHostToDevice);
+        cudaMemcpyAsync(adj_mat_d[thread_id] + y_offset *BLOCK_SIZE * comp_V, AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * comp_V, cp_amount, cudaMemcpyHostToDevice, streams[thread_id]);
 
         size_t block_row_sz = BLOCK_SIZE * comp_V * sizeof(int);
         for(int r = 0; r < round; r++){    
@@ -99,9 +100,9 @@ int main(int argc, char **argv) {
             }
             #pragma omp barrier
             cudaMemcpy(adj_mat_d[thread_id] + r * BLOCK_SIZE * comp_V, AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V, block_row_sz, cudaMemcpyHostToDevice);
-            phase1 <<<p1, threads, sizeof(int)*BLOCK_SIZE*BLOCK_SIZE >>>(r, comp_V, adj_mat_d[thread_id]);
-            phase2 <<<p2, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE >>>(r, comp_V, adj_mat_d[thread_id]);
-            phase3 <<<p3, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE >>>(r, comp_V, y_offset, adj_mat_d[thread_id]);
+            phase1 <<<p1, threads, sizeof(int)*BLOCK_SIZE*BLOCK_SIZE, streams[thread_id] >>>(r, comp_V, adj_mat_d[thread_id]);
+            phase2 <<<p2, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE, streams[thread_id] >>>(r, comp_V, adj_mat_d[thread_id]);
+            phase3 <<<p3, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE, streams[thread_id] >>>(r, comp_V, y_offset, adj_mat_d[thread_id]);
         }
         cudaMemcpy(AdjMatrix->graph.get() + y_offset *BLOCK_SIZE * comp_V, adj_mat_d[thread_id] + y_offset *BLOCK_SIZE * comp_V, block_row_sz * round_per_thd, cudaMemcpyDeviceToHost);
         #pragma omp barrier
