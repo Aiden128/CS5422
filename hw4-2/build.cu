@@ -24,7 +24,7 @@ struct Graph {
     }
 };
 
-void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost);
+//void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost);
 
 __global__ void phase1(const int blockId, const int nvertex, int *graph);
 __global__ void phase2(const int blockId, const int nvertex, int *graph);
@@ -99,15 +99,8 @@ int main(int argc, char **argv) {
             }
             #pragma omp barrier
             cudaMemcpy(adj_mat_d[thread_id] + r * BLOCK_SIZE * comp_V, AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V, block_row_sz, cudaMemcpyHostToDevice);
-
             phase1 <<<p1, threads, sizeof(int)*BLOCK_SIZE*BLOCK_SIZE >>>(r, comp_V, adj_mat_d[thread_id]);
-            
-            cudaDeviceSynchronize();
-            
             phase2 <<<p2, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE >>>(r, comp_V, adj_mat_d[thread_id]);
-            
-            cudaDeviceSynchronize();
-            
             phase3 <<<p3, threads, sizeof(int)*3*BLOCK_SIZE*BLOCK_SIZE >>>(r, comp_V, y_offset, adj_mat_d[thread_id]);
         }
         cudaMemcpy(AdjMatrix->graph.get() + y_offset *BLOCK_SIZE * comp_V, adj_mat_d[thread_id] + y_offset *BLOCK_SIZE * comp_V, block_row_sz * round_per_thd, cudaMemcpyDeviceToHost);
@@ -118,64 +111,6 @@ int main(int argc, char **argv) {
     Write_file(out_filename, AdjMatrix);
 
     return 0;
-}
-
-void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost) {
-    const int nvertex(dataHost->comp_nvertex);
-    const int block_num(std::ceil((float)nvertex / BLOCK_SIZE));
-    const dim3 gridPhase1(1, 1);
-    const dim3 gridPhase2(block_num, 2);
-    const dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE);
-    const size_t size(nvertex * nvertex * sizeof(int));
-    int *graphDevice[2];
-
-#pragma omp parallel num_threads(2)
-    {
-        int thread_id(omp_get_thread_num());
-        cudaSetDevice(thread_id);
-        cudaMalloc((void **)&graphDevice[thread_id], size);
-        // Divide data
-        int block_per_thread(block_num / 2);
-        if (thread_id == 1) {
-            block_per_thread += block_num % 2;
-        }
-        const dim3 gridPhase3(block_per_thread, block_num);
-        const int y_offset = block_per_thread * thread_id; // offset of y axis
-        const size_t copy_size(nvertex * BLOCK_SIZE * block_per_thread *
-                               sizeof(int));
-        const int offset(y_offset * BLOCK_SIZE * nvertex);
-        cudaMemcpy(graphDevice[thread_id] + offset,
-                   dataHost->graph.get() + offset, copy_size,
-                   cudaMemcpyHostToDevice);
-        const size_t block_row_size(BLOCK_SIZE * nvertex * sizeof(int));
-        const size_t shared_size(BLOCK_SIZE * BLOCK_SIZE * sizeof(int));
-        for (int blockID = 0; blockID < block_num; ++blockID) {
-            if ((blockID >= y_offset) &&
-                (blockID < (y_offset + block_per_thread))) {
-                cudaMemcpy(
-                    dataHost->graph.get() + blockID * BLOCK_SIZE * nvertex,
-                    graphDevice[thread_id] + blockID * BLOCK_SIZE * nvertex,
-                    block_row_size, cudaMemcpyDeviceToHost);
-            }
-#pragma omp barrier
-            cudaMemcpy(graphDevice[thread_id] + blockID * BLOCK_SIZE * nvertex,
-                       dataHost->graph.get() + blockID * BLOCK_SIZE * nvertex,
-                       block_row_size, cudaMemcpyHostToDevice);
-
-            phase1 << <gridPhase1, dimBlockSize, shared_size>>>
-                (blockID, nvertex, graphDevice[thread_id]);
-            cudaDeviceSynchronize();
-            phase2 << <gridPhase2, dimBlockSize, 3 * shared_size>>>
-                (blockID, nvertex, graphDevice[thread_id]);
-            cudaDeviceSynchronize();
-            phase3 << <gridPhase3, dimBlockSize, 3 * shared_size>>>
-                (blockID, nvertex, y_offset, graphDevice[thread_id]);
-        }
-        cudaMemcpy(dataHost->graph.get() + offset,
-                   graphDevice[thread_id] + offset, copy_size,
-                   cudaMemcpyDeviceToHost);
-#pragma omp barrier
-    }
 }
 
 // phase 1 kernel
@@ -253,10 +188,8 @@ void Write_file(const std::string &filename,
                 const std::unique_ptr<Graph> &data) {
     std::ofstream out_file(filename);
     for (int i = 0; i < data->nvertex; ++i) {
-        for (int j = 0; j < data->nvertex; ++j) {
-            out_file.write((char *)&data->graph[i * data->comp_nvertex + j],
-                           sizeof(int));
-        }
+        out_file.write((char *)&data->graph[i * data->comp_nvertex],
+                       sizeof(int) * data->nvertex);
     }
     out_file.close();
 }
