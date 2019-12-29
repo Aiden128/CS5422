@@ -8,5 +8,5 @@ alls: $(EXES)
 clean:
 	rm -f $(EXES)
 
-hw4-2: test.cu
+hw4-2: hw4-2.cu
 	nvcc $(NVFLAGS) -Xcompiler="$(CXXFLAGS)" $(LDFLAGS) -o $@ $?
