@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include <iostream>
+#include <omp.h>
 #include <cuda_profiler_api.h>
 
 constexpr int BLOCK_SIZE = 32;
@@ -13,224 +14,30 @@ constexpr int INF = 1073741823;
 // Graph structure
 struct Graph {
     unsigned int nvertex;         // number of vertex
+    unsigned int comp_nvertex;    // compensate vertex, v % BLOCK_SIZE == 0
     std::unique_ptr<int[]> graph; // graph matrix
 
     explicit Graph(int nvertex) : nvertex(nvertex) {
-        graph = std::unique_ptr<int[]>(new int[nvertex * nvertex]());
+        comp_nvertex =
+            nvertex + (BLOCK_SIZE - ((nvertex - 1) % BLOCK_SIZE + 1));
+        graph = std::unique_ptr<int[]>(new int[comp_nvertex * comp_nvertex]());
     }
 };
 
-static __global__ void phase1(const int blockId, const size_t pitch,
-                              const int nvertex, int *const graph) {
-    __shared__ int cache[BLOCK_SIZE][BLOCK_SIZE];
-    const int idx(threadIdx.x);
-    const int idy(threadIdx.y);
-    const int v1(BLOCK_SIZE * blockId + idy);
-    const int v2(BLOCK_SIZE * blockId + idx);
-    const int tId(v1 * pitch + v2);
-    int newPath(0);
+// void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost);
 
-    // Copy data to shared memory
-    if (v1 < nvertex && v2 < nvertex) {
-        cache[idy][idx] = graph[tId];
-    } else {
-        cache[idy][idx] = INF;
-    }
-    __syncthreads();
-    // Early stop unused thread to reduce sync cost
-    if (v1 >= nvertex || v2 >= nvertex) {
-        return;
-    }
-
-#pragma unroll
-    for (int u = 0; u < BLOCK_SIZE; ++u) {
-        newPath = cache[idy][u] + cache[u][idx];
-        if (newPath < cache[idy][idx]) {
-            cache[idy][idx] = newPath;
-        }
-        __syncthreads();
-    }
-    graph[tId] = cache[idy][idx];
-}
-
-static __global__ void phase2(const int blockId, const size_t pitch,
-                              const int nvertex, int *const graph) {
-    if (blockIdx.x == blockId) {
-        return;
-    }
-    const int idx(threadIdx.x);
-    const int idy(threadIdx.y);
-    int v1(BLOCK_SIZE * blockId + idy);
-    int v2(BLOCK_SIZE * blockId + idx);
-    int currentPath(0);
-    int tId(v1 * pitch + v2);
-    int newPath(0);
-    __shared__ int cacheBase[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ int cache[BLOCK_SIZE][BLOCK_SIZE];
-
-    // Copy data to shared memory
-    if (v1 < nvertex && v2 < nvertex) {
-        cacheBase[idy][idx] = graph[tId];
-    } else {
-        cacheBase[idy][idx] = INF;
-    }
-    if (blockIdx.y == 0) {
-        v2 = BLOCK_SIZE * blockIdx.x + idx;
-    } else {
-        v1 = BLOCK_SIZE * blockIdx.x + idy;
-    }
-    tId = v1 * pitch + v2;
-    if (v1 < nvertex && v2 < nvertex) {
-        currentPath = graph[tId];
-    } else {
-        currentPath = INF;
-    }
-    cache[idy][idx] = currentPath;
-    __syncthreads();
-    // Early stop unused thread to reduce sync cost
-    if (v1 >= nvertex || v2 >= nvertex) {
-        return;
-    }
-
-    if (blockIdx.y == 0) {
-#pragma unroll
-        for (int u = 0; u < BLOCK_SIZE; ++u) {
-            newPath = cacheBase[idy][u] + cache[u][idx];
-            if (newPath < currentPath) {
-                currentPath = newPath;
-            }
-            cache[idy][idx] = currentPath;
-        }
-    } else {
-#pragma unroll
-        for (int u = 0; u < BLOCK_SIZE; ++u) {
-            newPath = cache[idy][u] + cacheBase[u][idx];
-            if (newPath < currentPath) {
-                currentPath = newPath;
-            }
-            cache[idy][idx] = currentPath;
-        }
-    }
-    graph[tId] = currentPath;
-}
-
-static __global__ void phase3(const int blockId, const size_t pitch,
-                              const int nvertex, int *const graph) {
-    if (blockIdx.x == blockId || blockIdx.y == blockId) {
-        return;
-    }
-    const int idx(threadIdx.x);
-    const int idy(threadIdx.y);
-    const int v1(blockDim.y * blockIdx.y + idy);
-    const int v2(blockDim.x * blockIdx.x + idx);
-    const int v1Row(BLOCK_SIZE * blockId + idy);
-    const int v2Col(BLOCK_SIZE * blockId + idx);
-    const int tId(v1 * pitch + v2);
-    int index(0);
-    int currentPath(0);
-    int newPath(0);
-    __shared__ int cacheRow[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ int cacheCol[BLOCK_SIZE][BLOCK_SIZE];
-
-    // Copy data to shared memory
-    if (v1Row < nvertex && v2 < nvertex) {
-        index = (v1Row * pitch + v2);
-        cacheRow[idy][idx] = graph[index];
-    } else {
-        cacheRow[idy][idx] = INF;
-    }
-    if (v1 < nvertex && v2Col < nvertex) {
-        index = (v1 * pitch + v2Col);
-        cacheCol[idy][idx] = graph[index];
-    } else {
-        cacheCol[idy][idx] = INF;
-    }
-    __syncthreads();
-    // Early stop unused thread to reduce sync cost
-    if (v1 >= nvertex || v2 >= nvertex) {
-        return;
-    }
-
-    currentPath = graph[tId];
-#pragma unroll
-    for (int u = 0; u < BLOCK_SIZE; ++u) {
-        newPath = cacheCol[idy][u] + cacheRow[u][idx];
-        if (currentPath > newPath) {
-            currentPath = newPath;
-        }
-    }
-    graph[tId] = currentPath;
-}
-
-static size_t _cudaMoveMemoryToDevice(const std::unique_ptr<Graph> &dataHost,
-                                      int **graphDevice) {
-    const size_t height(dataHost->nvertex);
-    const size_t width(height * sizeof(int));
-    size_t pitch(0);
-
-    // Allocate GPU memory
-    cudaMallocPitch(graphDevice, &pitch, width, height);
-    // Copy input from host memory to GPU memory
-    cudaMemcpy2D(*graphDevice, pitch, dataHost->graph.get(), width, width,
-                 height, cudaMemcpyHostToDevice);
-
-    return pitch;
-}
-
-static void _cudaMoveMemoryToHost(int *graphDevice,
-                                  const std::unique_ptr<Graph> &dataHost,
-                                  const size_t &pitch) {
-    const size_t height(dataHost->nvertex);
-    const size_t width(height * sizeof(int));
-
-    // Copy result to host memory from GPU memory
-    cudaMemcpy2D(dataHost->graph.get(), width, graphDevice, pitch, width,
-                 height, cudaMemcpyDeviceToHost);
-    // Free GPU memory
-    cudaFree(graphDevice);
-}
-
-void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost) {
-    const int nvertex(dataHost->nvertex);
-    const int block_num(std::ceil((float)nvertex / BLOCK_SIZE));
-    const dim3 gridPhase1(1, 1);
-    const dim3 gridPhase2(block_num, 2);
-    const dim3 gridPhase3(block_num, block_num);
-    const dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE);
-    int *graphDevice(NULL);
-
-    cudaProfilerStart();
-    size_t pitch = _cudaMoveMemoryToDevice(dataHost, &graphDevice);
-    for (int blockID = 0; blockID < block_num; ++blockID) {
-        // phase1
-        phase1 <<<gridPhase1, dimBlockSize>>>
-            (blockID, pitch / sizeof(int), nvertex, graphDevice);
-        // phase2
-        phase2 <<<gridPhase2, dimBlockSize>>>
-            (blockID, pitch / sizeof(int), nvertex, graphDevice);
-        // phase3
-        phase3 <<<gridPhase3, dimBlockSize>>>
-            (blockID, pitch / sizeof(int), nvertex, graphDevice);
-    }
-    _cudaMoveMemoryToHost(graphDevice, dataHost, pitch);
-    cudaProfilerStop();
-}
+__global__ void phase1(const int blockId, const int nvertex, int *graph);
+__global__ void phase2(const int blockId, const int nvertex, int *graph);
+__global__ void phase3(const int blockId, const int nvertex, const int offset,
+                       int *graph);
 
 void Write_file(const std::string &filename,
-                const std::unique_ptr<Graph> &data) {
-    std::ofstream out_file(filename);
-    for (int i = 0; i < data->nvertex; ++i) {
-        out_file.write((char *)&data->graph[i * data->nvertex],
-                       sizeof(int) * data->nvertex);
-    }
-    out_file.close();
-}
+                const std::unique_ptr<Graph> &data);
 
 int main(int argc, char **argv) {
     const std::string out_filename(argv[2]);
     std::ifstream file(argv[1]);
-    int num_vertex(0);
-    int num_edge(0);
+    int num_vertex(0), num_edge(0);
     int src(0);
     int dest(0);
     int weight(0);
@@ -240,9 +47,10 @@ int main(int argc, char **argv) {
     file.read((char *)&num_edge, sizeof(num_edge));
     std::unique_ptr<Graph> AdjMatrix(new Graph(num_vertex));
     // Set initial values
-    std::fill_n(AdjMatrix->graph.get(), num_vertex * num_vertex, INF);
-    for (int i = 0; i < num_vertex; i++) {
-        AdjMatrix->graph[i * num_vertex + i] = 0;
+    std::fill_n(AdjMatrix->graph.get(),
+                AdjMatrix->comp_nvertex * AdjMatrix->comp_nvertex, INF);
+    for (int i = 0; i < AdjMatrix->comp_nvertex; i++) {
+        AdjMatrix->graph[i * AdjMatrix->comp_nvertex + i] = 0;
     }
     // Build graph
     std::unique_ptr<int[]> tmp(new int[num_edge * 3]);
@@ -251,14 +59,166 @@ int main(int argc, char **argv) {
         src = tmp[i * 3];
         dest = tmp[i * 3 + 1];
         weight = tmp[i * 3 + 2];
-        int idx(src * num_vertex + dest);
+        int idx(src * AdjMatrix->comp_nvertex + dest);
         AdjMatrix->graph[idx] = weight;
     }
     file.close();
     // Run APSP algorithm
-    cudaBlockedFW(AdjMatrix);
+    const int comp_V =
+        (num_vertex + (BLOCK_SIZE - ((num_vertex - 1) % BLOCK_SIZE + 1)));
+    const int round = std::ceil((float)comp_V / BLOCK_SIZE);
+    int *graph_d[2];
+
+    // 2D block
+    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 p1(1, 1);
+    dim3 p2(2, round - 1);
+    size_t sz = comp_V * comp_V * sizeof(int);
+#pragma omp parallel num_threads(2)
+    {
+        int thread_id = omp_get_thread_num();
+        cudaSetDevice(thread_id);
+        // Malloc memory
+        cudaMalloc((void **)&graph_d[thread_id], sz);
+
+        // divide data
+        int round_per_thd = round / 2;
+        int y_offset = round_per_thd * thread_id;
+        if (thread_id == 1) {
+            round_per_thd += round % 2;
+        }
+        dim3 p3(round_per_thd, round);
+
+        size_t cp_amount = comp_V * BLOCK_SIZE * round_per_thd * sizeof(int);
+        cudaMemcpy(graph_d[thread_id] + y_offset * BLOCK_SIZE * comp_V,
+                   AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * comp_V,
+                   cp_amount, cudaMemcpyHostToDevice);
+
+        size_t block_row_sz = BLOCK_SIZE * comp_V * sizeof(int);
+        for (int r = 0; r < round; r++) {
+            if (r >= y_offset && r < (y_offset + round_per_thd)) {
+                cudaMemcpy(AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V,
+                           graph_d[thread_id] + r * BLOCK_SIZE * comp_V,
+                           block_row_sz, cudaMemcpyDeviceToHost);
+            }
+#pragma omp barrier
+            cudaMemcpy(graph_d[thread_id] + r * BLOCK_SIZE * comp_V,
+                       AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V,
+                       block_row_sz, cudaMemcpyHostToDevice);
+            phase1 << <p1, threads, sizeof(int) * BLOCK_SIZE * BLOCK_SIZE>>>
+                (r, comp_V, graph_d[thread_id]);
+            phase2 << <p2, threads, sizeof(int) * 3 * BLOCK_SIZE * BLOCK_SIZE>>>
+                (r, comp_V, graph_d[thread_id]);
+            phase3 << <p3, threads, sizeof(int) * 3 * BLOCK_SIZE * BLOCK_SIZE>>>
+                (r, comp_V, y_offset, graph_d[thread_id]);
+        }
+        cudaMemcpy(AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * comp_V,
+                   graph_d[thread_id] + y_offset * BLOCK_SIZE * comp_V,
+                   block_row_sz * round_per_thd, cudaMemcpyDeviceToHost);
+#pragma omp barrier
+    }
+
     // Write results
     Write_file(out_filename, AdjMatrix);
 
     return 0;
+}
+
+__global__ void phase1(const int block_Id, const int nvertex, int *graph) {
+    const int i(threadIdx.y);
+    const int j(threadIdx.x);
+    const int offset(BLOCK_SIZE * block_Id);
+    int newPath(0);
+    extern __shared__ int cache[];
+
+    cache[i * BLOCK_SIZE + j] = graph[(i + offset) * nvertex + (j + offset)];
+    __syncthreads();
+
+#pragma unroll
+    for (int k = 0; k < BLOCK_SIZE; k++) {
+        newPath = cache[i * BLOCK_SIZE + k] + cache[k * BLOCK_SIZE + j];
+        if (cache[i * BLOCK_SIZE + j] > newPath) {
+            cache[i * BLOCK_SIZE + j] = newPath;
+        }
+    }
+    graph[(i + offset) * nvertex + (j + offset)] = cache[i * BLOCK_SIZE + j];
+}
+
+__global__ void phase2(const int block_Id, const int nvertex, int *graph) {
+    const int total_round(nvertex / BLOCK_SIZE);
+    const int i(threadIdx.y);
+    const int j(threadIdx.x);
+    const int i_offset(blockIdx.x == 1
+                           ? BLOCK_SIZE *
+                                 ((blockIdx.y + block_Id + 1) % total_round)
+                           : BLOCK_SIZE * block_Id);
+    const int j_offset(blockIdx.x == 1
+                           ? BLOCK_SIZE * block_Id
+                           : BLOCK_SIZE *
+                                 ((blockIdx.y + block_Id + 1) % total_round));
+    int newPath(0);
+    extern __shared__ int cache[];
+
+    cache[i * BLOCK_SIZE + j] =
+        graph[(i + i_offset) * nvertex + (j + j_offset)];
+    cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] =
+        graph[(i + i_offset) * nvertex + j + block_Id * BLOCK_SIZE];
+    cache[(i + 2 * BLOCK_SIZE) * BLOCK_SIZE + j] =
+        graph[(i + block_Id * BLOCK_SIZE) * nvertex + (j + j_offset)];
+    __syncthreads();
+
+#pragma unroll
+    for (int k = 0; k < BLOCK_SIZE; k++) {
+        newPath = cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] +
+                  cache[(k + 2 * BLOCK_SIZE) * BLOCK_SIZE + j];
+        if (cache[i * BLOCK_SIZE + j] > newPath) {
+            cache[i * BLOCK_SIZE + j] = newPath;
+            if (block_Id == i_offset / BLOCK_SIZE) {
+                cache[(i + 2 * BLOCK_SIZE) * BLOCK_SIZE + j] = newPath;
+            }
+            if (block_Id == j_offset / BLOCK_SIZE) {
+                cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] = newPath;
+            }
+        }
+    }
+    graph[(i + i_offset) * nvertex + (j + j_offset)] =
+        cache[i * BLOCK_SIZE + j];
+}
+
+__global__ void phase3(const int block_Id, const int nvertex, const int offset,
+                       int *graph) {
+    const int i(threadIdx.y);
+    const int j(threadIdx.x);
+    const int i_offset(BLOCK_SIZE * (blockIdx.x + offset));
+    const int j_offset(BLOCK_SIZE * blockIdx.y);
+    int newPath(0);
+    extern __shared__ int cache[];
+
+    cache[i * BLOCK_SIZE + j] =
+        graph[(i + i_offset) * nvertex + (j + j_offset)];
+    cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] =
+        graph[(i + i_offset) * nvertex + j + block_Id * BLOCK_SIZE];
+    cache[(i + 2 * BLOCK_SIZE) * BLOCK_SIZE + j] =
+        graph[(i + block_Id * BLOCK_SIZE) * nvertex + (j + j_offset)];
+    __syncthreads();
+
+#pragma unroll
+    for (int k = 0; k < BLOCK_SIZE; k++) {
+        newPath = cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] +
+                  cache[(k + 2 * BLOCK_SIZE) * BLOCK_SIZE + j];
+        if (cache[i * BLOCK_SIZE + j] > newPath)
+            cache[i * BLOCK_SIZE + j] = newPath;
+    }
+    graph[(i + i_offset) * nvertex + (j + j_offset)] =
+        cache[i * BLOCK_SIZE + j];
+}
+
+void Write_file(const std::string &filename,
+                const std::unique_ptr<Graph> &data) {
+    std::ofstream out_file(filename);
+    for (int i = 0; i < data->nvertex; ++i) {
+        out_file.write((char *)&data->graph[i * data->comp_nvertex],
+                       sizeof(int) * data->nvertex);
+    }
+    out_file.close();
 }
