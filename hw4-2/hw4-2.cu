@@ -24,13 +24,11 @@ struct Graph {
     }
 };
 
-// void cudaBlockedFW(const std::unique_ptr<Graph> &dataHost);
-
-__global__ void phase1(const int blockId, const int nvertex, int *graph);
-__global__ void phase2(const int blockId, const int nvertex, int *graph);
-__global__ void phase3(const int blockId, const int nvertex, const int offset,
+void cudaBlockedFW(const std::unique_ptr<Graph> &AdjMatrix);
+__global__ void phase1(const int blockID, const int nvertex, int *graph);
+__global__ void phase2(const int blockID, const int nvertex, int *graph);
+__global__ void phase3(const int blockID, const int nvertex, const int offset,
                        int *graph);
-
 void Write_file(const std::string &filename,
                 const std::unique_ptr<Graph> &data);
 
@@ -63,71 +61,70 @@ int main(int argc, char **argv) {
         AdjMatrix->graph[idx] = weight;
     }
     file.close();
-    // Run APSP algorithm
-    const int comp_V =
-        (num_vertex + (BLOCK_SIZE - ((num_vertex - 1) % BLOCK_SIZE + 1)));
-    const int round = std::ceil((float)comp_V / BLOCK_SIZE);
-    int *graph_d[2];
-
-    // 2D block
-    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 p1(1, 1);
-    dim3 p2(2, round - 1);
-    size_t sz = comp_V * comp_V * sizeof(int);
-#pragma omp parallel num_threads(2)
-    {
-        int thread_id = omp_get_thread_num();
-        cudaSetDevice(thread_id);
-        // Malloc memory
-        cudaMalloc((void **)&graph_d[thread_id], sz);
-
-        // divide data
-        int round_per_thd = round / 2;
-        int y_offset = round_per_thd * thread_id;
-        if (thread_id == 1) {
-            round_per_thd += round % 2;
-        }
-        dim3 p3(round_per_thd, round);
-
-        size_t cp_amount = comp_V * BLOCK_SIZE * round_per_thd * sizeof(int);
-        cudaMemcpy(graph_d[thread_id] + y_offset * BLOCK_SIZE * comp_V,
-                   AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * comp_V,
-                   cp_amount, cudaMemcpyHostToDevice);
-
-        size_t block_row_sz = BLOCK_SIZE * comp_V * sizeof(int);
-        for (int r = 0; r < round; r++) {
-            if (r >= y_offset && r < (y_offset + round_per_thd)) {
-                cudaMemcpy(AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V,
-                           graph_d[thread_id] + r * BLOCK_SIZE * comp_V,
-                           block_row_sz, cudaMemcpyDeviceToHost);
-            }
-#pragma omp barrier
-            cudaMemcpy(graph_d[thread_id] + r * BLOCK_SIZE * comp_V,
-                       AdjMatrix->graph.get() + r * BLOCK_SIZE * comp_V,
-                       block_row_sz, cudaMemcpyHostToDevice);
-            phase1 << <p1, threads, sizeof(int) * BLOCK_SIZE * BLOCK_SIZE>>>
-                (r, comp_V, graph_d[thread_id]);
-            phase2 << <p2, threads, sizeof(int) * 3 * BLOCK_SIZE * BLOCK_SIZE>>>
-                (r, comp_V, graph_d[thread_id]);
-            phase3 << <p3, threads, sizeof(int) * 3 * BLOCK_SIZE * BLOCK_SIZE>>>
-                (r, comp_V, y_offset, graph_d[thread_id]);
-        }
-        cudaMemcpy(AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * comp_V,
-                   graph_d[thread_id] + y_offset * BLOCK_SIZE * comp_V,
-                   block_row_sz * round_per_thd, cudaMemcpyDeviceToHost);
-#pragma omp barrier
-    }
-
+    // Floyd Warshall Algorithm
+    cudaBlockedFW(AdjMatrix);
     // Write results
     Write_file(out_filename, AdjMatrix);
 
     return 0;
 }
 
-__global__ void phase1(const int block_Id, const int nvertex, int *graph) {
+void cudaBlockedFW(const std::unique_ptr<Graph> &AdjMatrix) {
+    // Run APSP algorithm
+    const int nvertex(AdjMatrix->comp_nvertex);
+    const int orig_nvertex(AdjMatrix->nvertex);
+    const int block_num(std::ceil((float)nvertex / BLOCK_SIZE));
+    dim3 gridPhase1(1, 1);
+    dim3 gridPhase2(2, block_num - 1);
+    dim3 dimBlockSize(BLOCK_SIZE, BLOCK_SIZE);
+    int *graph_d[2];
+    const size_t graph_size(nvertex * nvertex * sizeof(int));
+
+#pragma omp parallel num_threads(2)
+    {
+        int thread_id = omp_get_thread_num();
+        cudaSetDevice(thread_id);
+        cudaMalloc((void **)&graph_d[thread_id], graph_size);
+        // divide data
+        int block_per_thd(block_num / 2);
+        int y_offset(block_per_thd * thread_id);
+        if (thread_id == 1) {
+            block_per_thd += block_num % 2;
+        }
+        dim3 gridPhase3(block_per_thd, block_num);
+        const size_t cp_amount(nvertex * BLOCK_SIZE * block_per_thd * sizeof(int));
+        const size_t block_row_size(BLOCK_SIZE * nvertex * sizeof(int));
+        const size_t cache_size(BLOCK_SIZE * BLOCK_SIZE * sizeof(int));
+        cudaMemcpy(graph_d[thread_id] + y_offset * BLOCK_SIZE * nvertex,
+                   AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * nvertex,
+                   cp_amount, cudaMemcpyHostToDevice);
+        for (int blockID = 0; blockID < block_num; ++blockID) {
+            if (__builtin_expect(blockID >= y_offset && blockID < (y_offset + block_per_thd), true)) {
+                cudaMemcpy(AdjMatrix->graph.get() + blockID * BLOCK_SIZE * nvertex,
+                           graph_d[thread_id] + blockID * BLOCK_SIZE * nvertex,
+                           block_row_size, cudaMemcpyDeviceToHost);
+            }
+#pragma omp barrier
+            cudaMemcpy(graph_d[thread_id] + blockID * BLOCK_SIZE * nvertex,
+                       AdjMatrix->graph.get() + blockID * BLOCK_SIZE * nvertex,
+                       block_row_size, cudaMemcpyHostToDevice);
+            phase1 << <gridPhase1, dimBlockSize, cache_size>>>
+                (blockID, nvertex, graph_d[thread_id]);
+            phase2 << <gridPhase2, dimBlockSize, 3 * cache_size>>>
+                (blockID, nvertex, graph_d[thread_id]);
+            phase3 << <gridPhase3, dimBlockSize, 3 * cache_size>>>
+                (blockID, nvertex, y_offset, graph_d[thread_id]);
+        }
+        cudaMemcpy(AdjMatrix->graph.get() + y_offset * BLOCK_SIZE * nvertex,
+                   graph_d[thread_id] + y_offset * BLOCK_SIZE * nvertex,
+                   block_row_size * block_per_thd, cudaMemcpyDeviceToHost);
+    }
+}
+
+__global__ void phase1(const int block_ID, const int nvertex, int *graph) {
     const int i(threadIdx.y);
     const int j(threadIdx.x);
-    const int offset(BLOCK_SIZE * block_Id);
+    const int offset(BLOCK_SIZE * block_ID);
     int newPath(0);
     extern __shared__ int cache[];
 
@@ -144,27 +141,27 @@ __global__ void phase1(const int block_Id, const int nvertex, int *graph) {
     graph[(i + offset) * nvertex + (j + offset)] = cache[i * BLOCK_SIZE + j];
 }
 
-__global__ void phase2(const int block_Id, const int nvertex, int *graph) {
+__global__ void phase2(const int block_ID, const int nvertex, int *graph) {
     const int total_round(nvertex / BLOCK_SIZE);
     const int i(threadIdx.y);
     const int j(threadIdx.x);
     const int i_offset(blockIdx.x == 1
                            ? BLOCK_SIZE *
-                                 ((blockIdx.y + block_Id + 1) % total_round)
-                           : BLOCK_SIZE * block_Id);
+                                 ((blockIdx.y + block_ID + 1) % total_round)
+                           : BLOCK_SIZE * block_ID);
     const int j_offset(blockIdx.x == 1
-                           ? BLOCK_SIZE * block_Id
+                           ? BLOCK_SIZE * block_ID
                            : BLOCK_SIZE *
-                                 ((blockIdx.y + block_Id + 1) % total_round));
+                                 ((blockIdx.y + block_ID + 1) % total_round));
     int newPath(0);
     extern __shared__ int cache[];
 
     cache[i * BLOCK_SIZE + j] =
         graph[(i + i_offset) * nvertex + (j + j_offset)];
     cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] =
-        graph[(i + i_offset) * nvertex + j + block_Id * BLOCK_SIZE];
+        graph[(i + i_offset) * nvertex + j + block_ID * BLOCK_SIZE];
     cache[(i + 2 * BLOCK_SIZE) * BLOCK_SIZE + j] =
-        graph[(i + block_Id * BLOCK_SIZE) * nvertex + (j + j_offset)];
+        graph[(i + block_ID * BLOCK_SIZE) * nvertex + (j + j_offset)];
     __syncthreads();
 
 #pragma unroll
@@ -173,10 +170,10 @@ __global__ void phase2(const int block_Id, const int nvertex, int *graph) {
                   cache[(k + 2 * BLOCK_SIZE) * BLOCK_SIZE + j];
         if (cache[i * BLOCK_SIZE + j] > newPath) {
             cache[i * BLOCK_SIZE + j] = newPath;
-            if (block_Id == i_offset / BLOCK_SIZE) {
+            if (block_ID == i_offset / BLOCK_SIZE) {
                 cache[(i + 2 * BLOCK_SIZE) * BLOCK_SIZE + j] = newPath;
             }
-            if (block_Id == j_offset / BLOCK_SIZE) {
+            if (block_ID == j_offset / BLOCK_SIZE) {
                 cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] = newPath;
             }
         }
@@ -185,7 +182,7 @@ __global__ void phase2(const int block_Id, const int nvertex, int *graph) {
         cache[i * BLOCK_SIZE + j];
 }
 
-__global__ void phase3(const int block_Id, const int nvertex, const int offset,
+__global__ void phase3(const int block_ID, const int nvertex, const int offset,
                        int *graph) {
     const int i(threadIdx.y);
     const int j(threadIdx.x);
@@ -197,17 +194,18 @@ __global__ void phase3(const int block_Id, const int nvertex, const int offset,
     cache[i * BLOCK_SIZE + j] =
         graph[(i + i_offset) * nvertex + (j + j_offset)];
     cache[(i + BLOCK_SIZE) * BLOCK_SIZE + j] =
-        graph[(i + i_offset) * nvertex + j + block_Id * BLOCK_SIZE];
+        graph[(i + i_offset) * nvertex + j + block_ID * BLOCK_SIZE];
     cache[(i + 2 * BLOCK_SIZE) * BLOCK_SIZE + j] =
-        graph[(i + block_Id * BLOCK_SIZE) * nvertex + (j + j_offset)];
+        graph[(i + block_ID * BLOCK_SIZE) * nvertex + (j + j_offset)];
     __syncthreads();
 
 #pragma unroll
     for (int k = 0; k < BLOCK_SIZE; k++) {
         newPath = cache[(i + BLOCK_SIZE) * BLOCK_SIZE + k] +
                   cache[(k + 2 * BLOCK_SIZE) * BLOCK_SIZE + j];
-        if (cache[i * BLOCK_SIZE + j] > newPath)
+        if (cache[i * BLOCK_SIZE + j] > newPath) {
             cache[i * BLOCK_SIZE + j] = newPath;
+        }
     }
     graph[(i + i_offset) * nvertex + (j + j_offset)] =
         cache[i * BLOCK_SIZE + j];
