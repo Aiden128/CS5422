@@ -5,6 +5,7 @@ from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
 
 # TODO0: import horovod
+import horovod.tensorflow as hvd
 
 def model_fn(features, labels, mode):
   # CNN
@@ -41,6 +42,8 @@ def model_fn(features, labels, mode):
   if mode == tf.estimator.ModeKeys.TRAIN:
     global_step = tf.train.get_global_step()
     # TODO4: wrap optimizer with horovod optimizer
+    optimizer = tf.train.AdamOptimizer(LR)
+    optimizer = hvd.DistributedOptimizer(optimizer)
     train_op = tf.train.AdamOptimizer(LR).minimize(loss, global_step=global_step)
     
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
@@ -58,12 +61,14 @@ def main(_):
   np.random.seed(1)
 
   # TODO1: Init horovod
-
+  hvd.init()
   # TODO2: Specify GPU for horovod process (optional)
-  # config=tf.ConfigProto()
-  # config.gpu_options.visible_device_list = str(hvd.local_rank())
+  config=tf.ConfigProto()
+  config.gpu_options.visible_device_list = str(hvd.local_rank())
 
   # TODO3: Scale training steps, and learning rate
+  steps = (600 - 1 + hvd.size())
+  LR = 0.001 * hvd.size()
   BATCH_SIZE = 50
 
   mnist = input_data.read_data_sets('./mnist', one_hot=True)  # they has been normalized to range (0,1)
@@ -78,7 +83,7 @@ def main(_):
 
   # TODO5: Create hooks for broadcasting initial model weights
   hooks = [
-    
+    hvd.BroadcastGlobalVariablesHook(0),
   ]
 
   # Do training

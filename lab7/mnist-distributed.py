@@ -62,6 +62,18 @@ def main(_):
   np.random.seed(1)
 
   # TODO1: setup training environment
+  environ = {
+    'cluster' : {
+      'worker' : args.worker.split(','),
+      'ps' : args.ps.split(',')
+    },
+    'task' : {
+      'type': args.jobname,
+      'index' : args.index
+    }
+  }
+  print(environ)
+  os.environ['TF_CONFIG'] = json.dumps(environ)
 
   steps = 600
   LR = 0.001              # learning rate
@@ -72,7 +84,11 @@ def main(_):
   test_y = mnist.test.labels[:2000]
 
   # TODO2: Create running config for ParameterServerStrategy
-  run_config = tf.estimator.RunConfig(log_step_count_steps=10)
+  strategy = tf.contrib.distribute.ParameterServerStrategy()
+  run_config = tf.estimator.RunConfig(
+    log_step_count_steps = 10,
+    train_distribute = strategy
+  )
 
   # Create estimator
   classifier = tf.estimator.Estimator(model_fn=model_fn, config=run_config, model_dir='./model')
@@ -87,14 +103,16 @@ def main(_):
     num_epochs=None, shuffle=True, 
     batch_size=BATCH_SIZE
   )
+  train_spec = tf.estimator.TrainSpec(input_fn=lambda:train_input_fn, max_steps=steps)
 
   # TODO4: Create evaluator_spec
   test_input_fn = tf.compat.v1.estimator.inputs.numpy_input_fn(
     x={'tf_x': test_x}, y=test_y, num_epochs=1, shuffle=False
   )
+  eval_spec = tf.estimator.EvalSpec(input_fn=lambda:test_input_fn)
 
   # TODO5: Use train_and_evaluate to train and evaluate model
-
+  ret = tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
   print(args.jobname, args.index, 'done')
 
 if __name__ == '__main__':
